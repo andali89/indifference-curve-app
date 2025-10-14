@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -11,6 +16,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          # Ensure the action can push back using the provided token
+          persist-credentials: true
+          # Fetch full history so the action can create commits/tags if needed
+          fetch-depth: 0
 
       - name: Use Node.js
         uses: actions/setup-node@v4
