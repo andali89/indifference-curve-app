@@ -283,7 +283,7 @@ const sidebarWidth = ref(280);
 const isResizing = ref(false);
 
 // Y-axis controls
-const autoYAxis = ref(true);
+const autoYAxis = ref(false);
 const manualYMin = ref(0);
 const manualYMax = ref(1200);
 
@@ -326,14 +326,18 @@ const yAxisMax = computed(() => {
   const I_exp = iWeight.value;
   const H_exp = hWeight.value;
   
+  
   for (let h = 0.1; h <= 16; h += 0.1) {
+
     const income = Math.pow(U / Math.pow(h, H_exp), 1 / I_exp);
     if (income >= 0 && !isNaN(income) && isFinite(income)) {
       points.push(income);
     }
   }
-  
-  const curveMax = points.length > 0 ? Math.max(...points) : 0;
+
+  const p_num = 30;
+  const a = points.length >= p_num ? Math.floor(points[p_num - 1]) : 0;
+  const curveMax = points.length > 0 ? (a * 3) : 0;
   
   // Add 10% padding to the max value
   const dataMax = Math.max(budgetMax, curveMax);
