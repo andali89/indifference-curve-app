@@ -1,11 +1,9 @@
 <template>
-  <IndifferenceCurve />
-  
+  <CurvesPage />
 </template>
 
 <script setup>
-import IndifferenceCurve from './components/IndifferenceCurve.vue';
-
+import CurvesPage from './pages/CurvesPage.vue';
 </script>
 
 <style>
