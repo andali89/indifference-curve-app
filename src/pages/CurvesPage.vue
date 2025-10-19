@@ -16,11 +16,17 @@
       :style="{ width: `${sidebarWidth}px` }"
     >
       <div class="sidebar-header">
-        <h2>无差异曲线分析</h2>
-        <p class="subtitle">Indifference Curve Analysis</p>
+        <h2>{{ activeCurve.name }}分析</h2>
       </div>
 
       <CurveSelector :curves="curves" v-model="selectedCurveId" />
+
+      <CurvePanel
+        :key="selectedCurveId"
+        :curve="activeCurve"
+        :modelValue="activeParams"
+        @update:modelValue="updateActiveParams"
+      />
 
       <SharedControls
         :modelValue="sharedControls"
@@ -36,12 +42,7 @@
         清除保留曲线 ({{ heldSeries.length }})
       </button>
 
-      <CurvePanel
-        :key="selectedCurveId"
-        :curve="activeCurve"
-        :modelValue="activeParams"
-        @update:modelValue="updateActiveParams"
-      />
+      
 
       <div
         class="resize-handle"
@@ -80,12 +81,13 @@ const sharedControls = reactive({
   hold: false,
   autoYAxis: false,
   manualYMin: 0,
-  manualYMax: 1200,
+  manualYMax: 0,
   chartPadding: 20,
   viewMode: 'normal',
   aspectRatioPreset: 'auto',
   aspectWidth: 16,
   aspectHeight: 9,
+  defaultYAxis: {min: 0, max: 1200},
 });
 
 const sidebarVisible = ref(true);
@@ -133,6 +135,25 @@ watchEffect(() => {
 
 const activeCurve = computed(() => getCurve(selectedCurveId.value));
 
+// ...existing code...
+watch(selectedCurveId, (newId, oldId) => {
+  const curve = getCurve(newId);
+  if (!curve) return;
+  // 初始化参数与 y 轴等（深拷贝）
+  resetActiveParams(cloneParams(curve.defaultParams || {}));
+  sharedControls.defaultYAxis = cloneParams(
+    curve.defaultYAxis ?? curve.defaultParams?.defaultYAxis ?? { min: 0, max: 1200 }
+  );
+  sharedControls.manualYMax = sharedControls.defaultYAxis.max;
+  sharedControls.manualYMin = sharedControls.defaultYAxis.min;
+  console.log('[CurvesPage] Selected curve changed:', newId, curve);
+  // 其它初始化与首次绘图
+  clearHeldSeries();
+  currentResult.value = null;
+  lastParams.value = null;
+  recompute();
+}, { immediate: true });
+
 watch(
   activeCurve,
   (curve) => {
@@ -141,6 +162,8 @@ watch(
     clearHeldSeries();
     currentResult.value = null;
     lastParams.value = null;
+    recompute();
+
   },
   { immediate: true }
 );
@@ -187,8 +210,7 @@ function recompute() {
   }
 
   const clonedParams = cloneParams(activeParams);
-  console.log('[CurvesPage] recompute() called with params:', clonedParams);
-
+  
   maybeAddHeldSeries(clonedParams);
 
   const result = curve.computeSeries(clonedParams, {
@@ -197,9 +219,12 @@ function recompute() {
     manualYMax: sharedControls.manualYMax,
   });
 
+  console.log('sharedControls.autoYAxis:', sharedControls.autoYAxis);
   currentResult.value = result;
+  console.log('[11111111] currentResult:', currentResult.value);
   chartMeta.value = result?.meta || {};
   yAxisRange.value = result?.axis || { min: 0, max: 1200 };
+  console.log('yAxisRange:', yAxisRange.value);
   lastParams.value = clonedParams;
   lastRecompute.value = new Date().toISOString();
 }
@@ -223,6 +248,9 @@ function maybeAddHeldSeries(nextParams) {
 function cloneParams(source) {
   return JSON.parse(JSON.stringify(source || {}));
 }
+
+
+
 </script>
 
 <style scoped>

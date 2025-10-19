@@ -230,4 +230,5 @@ input[type='number'] {
     grid-template-columns: 1fr;
   }
 }
+
 </style>

@@ -38,6 +38,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useChartOptions } from '../composables/useChartOptions.js';
 import { useFullscreen } from '../composables/useFullscreen.js';
 
+
+
+
 const props = defineProps({
   series: {
     type: Array,
@@ -57,6 +60,11 @@ const props = defineProps({
   },
 });
 
+
+
+
+
+
 const chartAreaRef = ref(null);
 const chartContainerRef = ref(null);
 const containerWidth = ref(0);
@@ -71,7 +79,10 @@ const filteredSeries = computed(() =>
   })
 );
 
-const chartOption = useChartOptions(filteredSeries, props.yAxis, props.sharedControls);
+// Wrap yAxis in computed to ensure reactivity when parent updates it
+const yAxisComputed = computed(() => props.yAxis);
+
+const chartOption = useChartOptions(filteredSeries, yAxisComputed, props.sharedControls);
 
 const isAspectMode = computed(() => props.sharedControls.aspectRatioPreset !== 'auto');
 
@@ -81,7 +92,6 @@ const chartDimensions = computed(() => {
   
   const preset = props.sharedControls?.aspectRatioPreset ?? 'auto';
   if (preset === 'auto') {
-    alert('已切换到自适应模式');
     return null;
   }
   console.log('[ChartArea] chartDimensions: aspect mode', {
@@ -162,82 +172,6 @@ const wrapperStyle = computed(() => {
   };
 });
 
-// const wrapperStyle = computed(() => {
-//   const padding = props.sharedControls.chartPadding ?? 20;
-//   const base = {
-//     padding: `${padding}px`,
-//     boxSizing: 'border-box',
-//     transformOrigin: 'center center'
-//   };
-
-//   if (!isAspectMode.value) {
-//     console.log('[ChartArea] wrapperStyle: auto mode');
-//     return {
-//       ...base,
-//       width: '100%',
-//       height: '100%',
-//       flex: '1 1 auto',
-//     };
-//   }
-
-//   const ratioWidth = props.sharedControls.aspectWidth || 16;
-//   const ratioHeight = props.sharedControls.aspectHeight || 9;
-//   const targetRatio = ratioWidth / ratioHeight;
-
-//   const paddingTotal = padding * 2;
-//   const maxWidth = containerWidth.value > 0 ? containerWidth.value : 800;
-//   const maxHeight = containerHeight.value > 0 ? containerHeight.value : 600;
-  
-//   const availableWidth = Math.max(maxWidth - paddingTotal, 200);
-//   const availableHeight = Math.max(maxHeight - paddingTotal, 200);
-
-//   // Calculate dimensions that fit target ratio within available space
-//   let width = availableWidth;
-//   let height = width / targetRatio;
-
-//   if (height > availableHeight) {
-//     height = availableHeight;
-//     width = height * targetRatio;
-//   }
-
-//   // Enforce minimums
-//   const minWidth = 320;
-//   const minHeight = 240;
-  
-//   if (width < minWidth) {
-//     width = minWidth;
-//     height = width / targetRatio;
-//   }
-//   if (height < minHeight) {
-//     height = minHeight;
-//     width = height * targetRatio;
-//   }
-
-//   // Enforce maximums (do not exceed container)
-//   if (width > availableWidth) {
-//     width = availableWidth;
-//     height = width / targetRatio;
-//   }
-//   if (height > availableHeight) {
-//     height = availableHeight;
-//     width = height * targetRatio;
-//   }
-
-//   console.log('[ChartArea] wrapperStyle: aspect mode', {
-//     preset: props.sharedControls.aspectRatioPreset,
-//     ratio: `${ratioWidth}:${ratioHeight}`,
-//     container: `${maxWidth}x${maxHeight}`,
-//     calculated: `${Math.round(width)}x${Math.round(height)}`
-//   });
-
-//   return {
-//     ...base,
-//     width: `${Math.round(width)}px`,
-//     height: `${Math.round(height)}px`,
-//     margin: 'auto',
-//     flex: '0 0 auto',
-//   };
-// });
 
 function updateContainerSize() {
   if (!chartContainerRef.value) return;

@@ -1,14 +1,14 @@
 const LEISURE_HOURS = 16;
 
-export function generateBudgetLine(params) {
-  const { wageRate = 0, unearnedIncome = 0 } = params;
-  const data = [];
-  for (let leisure = 0; leisure <= LEISURE_HOURS; leisure += 0.1) {
-    const income = wageRate * (LEISURE_HOURS - leisure) + unearnedIncome;
-    data.push([round(leisure), round(income)]);
-  }
-  return data;
-}
+// export function generateBudgetLine(params) {
+//   const { wageRate = 0, unearnedIncome = 0 } = params;
+//   const data = [];
+//   for (let leisure = 0; leisure <= LEISURE_HOURS; leisure += 0.1) {
+//     const income = wageRate * (LEISURE_HOURS - leisure) + unearnedIncome;
+//     data.push([round(leisure), round(income)]);
+//   }
+//   return data;
+// }
 
 export function generateIndifferenceCurve(params, yAxisMax, step = 0.05) {
   const {

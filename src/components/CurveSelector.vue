@@ -1,6 +1,6 @@
 <template>
   <div class="curve-selector">
-    <label class="selector-label" for="curve-select">曲线类型</label>
+    <h3 class="selector-label" for="curve-select">曲线类型</h3>
     <select
       id="curve-select"
       class="selector-input"
@@ -42,23 +42,30 @@ function onChange(event) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e8e8e8;
 }
 
 .selector-label {
-  font-size: 13px;
-  color: #555;
+  padding-left: 36px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
+  color: #333;
+  
 }
 
 .selector-input {
-  width: 100%;
+  box-sizing: border-box;
+  width: 80%;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d2d2d7;
   background: #fff;
   font-size: 14px;
   color: #1d1d1f;
+  margin: 0 auto;
+  align-self: center;
   transition: border-color 0.2s ease;
 }
 

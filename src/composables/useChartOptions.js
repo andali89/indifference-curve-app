@@ -5,7 +5,8 @@ export function useChartOptions(seriesInput, yAxisInput, sharedInput) {
     const series = unref(seriesInput) ?? [];
     const yAxis = normalizeAxis(unref(yAxisInput));
     const shared = normalizeShared(unref(sharedInput));
-
+    //  console.log('yAxisInput in useChartOptions:', yAxisInput);
+    // console.log('yAxis in useChartOptions:', yAxis);
     const legendData = series
       .map((s) => s?.name)
       .filter(Boolean);
