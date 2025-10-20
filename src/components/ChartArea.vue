@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
 .chart-area {
   display: flex;
   flex-direction: column;
-  padding: 30px;
+  padding: 20px 20px  45px 20px ;
   transition: all 0.3s ease;
   min-height: 0;
   min-width: 0;
