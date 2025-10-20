@@ -9,7 +9,7 @@ export default {
   ChartInfoComponent: ChartInfo,
   defaultParams: {
     iWeight: 1,
-    hWeight: 2,
+    hWeight: 1,
     unearnedIncome: 100,
     utility: 100,
     wMin: 10,
