@@ -22,5 +22,5 @@ export default {
     yLabel: '工资率 (元/小时)',
   },
   chartTitle: '劳动供给曲线分析',
-  holdEnabled: false,
+  holdEnabled: false,  // Enable "Hold previous curve" feature
 };

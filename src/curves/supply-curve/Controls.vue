@@ -1,18 +1,259 @@
 <template>
-  <div class="controls">
-    <!-- compact wage inputs -->
-    <label>W min<input class="compact-input" v-model.number="localParams.wMin" /></label>
-    <label>W max<input class="compact-input" v-model.number="localParams.wMax" /></label>
+  <div class="indifference-controls">
+    <section class="control-section">
+      <h3>效用函数参数</h3>
+      <div class="control-grid">
+        <div class="control-item">
+          <label for="i-weight">收入权重 (I)</label>
+          <input
+            id="i-weight"
+            type="number"
+            min="0.1"
+            step="0.1"
+            v-model.number="local.iWeight"
+          />
+        </div>
+        <div class="control-item">
+          <label for="h-weight">闲暇权重 (H)</label>
+          <input
+            id="h-weight"
+            type="number"
+            min="0.1"
+            step="0.1"
+            v-model.number="local.hWeight"
+          />
+        </div>
+      </div>
+      <div class="formula">U = I<sup>{{ local.iWeight }}</sup> × H<sup>{{ local.hWeight }}</sup></div>
+    </section>
+
+    <section class="control-section">
+      <h3>预算约束参数</h3>
+      <div class="control-item">
+        <label for="unearned-income">非劳动收入</label>
+        <div class="input-with-unit">
+          <input
+            id="unearned-income"
+            type="number"
+            min="0"
+            step="50"
+            v-model.number="local.unearnedIncome"
+          />
+          <span class="unit">元</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="control-section">
+      <h3>工资率范围（供给曲线）</h3>
+      <div class="control-grid">
+        <div class="control-item">
+          <label for="w-min">最低工资率</label>
+          <div class="input-with-unit">
+            <input
+              id="w-min"
+              type="number"
+              min="1"
+              step="5"
+              v-model.number="local.wMin"
+            />
+            <span class="unit">元/小时</span>
+          </div>
+        </div>
+        </div>
+        <div class="control-grid">
+        <div class="control-item">
+          <label for="w-max">最高工资率</label>
+          <div class="input-with-unit">
+            <input
+              id="w-max"
+              type="number"
+              min="10"
+              step="10"
+              v-model.number="local.wMax"
+            />
+            <span class="unit">元/小时</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    
   </div>
 </template>
 
 <script setup>
-import { reactive, toRefs } from 'vue';
-defineProps({ params: Object });
-const props = defineProps({ params: Object });
-const localParams = reactive({ ...props.params });
+import { reactive, watch } from 'vue';
+
+const props = defineProps({
+  modelValue: {
+    type: Object,
+    default: () => ({
+      iWeight: 1,
+      hWeight: 1,
+      unearnedIncome: 0,
+      utility: 100,
+      wMin: 10,
+      wMax: 100,
+    }),
+  },
+});
+
+const emit = defineEmits(['update:modelValue']);
+
+const local = reactive({ ...props.modelValue });
+
+watch(
+  () => props.modelValue,
+  (value) => {
+    Object.assign(local, value || {});
+  },
+  { deep: true }
+);
+
+watch(
+  local,
+  (value) => {
+    const clone = { ...value };
+    if (!(clone.utility >= 100)) {
+      clone.utility = 100;
+      local.utility = 100;
+    }
+    if (!(clone.iWeight > 0)) {
+      clone.iWeight = 0.1;
+      local.iWeight = 0.1;
+    }
+    if (!(clone.hWeight > 0)) {
+      clone.hWeight = 0.1;
+      local.hWeight = 0.1;
+    }
+    if (!(clone.wMin > 0)) {
+      clone.wMin = 1;
+      local.wMin = 1;
+    }
+    if (!(clone.wMax > clone.wMin)) {
+      clone.wMax = clone.wMin + 10;
+      local.wMax = clone.wMin + 10;
+    }
+    console.log('[Controls] emit update:modelValue', clone);
+    emit('update:modelValue', clone);
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>
-.compact-input { width: 6rem; margin-left: .5rem; }
+.indifference-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.control-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
+input[type='number'] {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d2d2d7;
+  font-size: 14px;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-unit input {
+  flex: 1;
+}
+
+.unit {
+  font-size: 13px;
+  color: #666;
+  min-width: 50px;
+}
+
+/* Compact wage inputs so they don't stretch too wide in the sidebar */
+.compact-input {
+  flex: 0 0 120px; /* fixed base width */
+  width: 120px;
+  max-width: 180px;
+}
+
+.formula {
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  background: linear-gradient(135deg, #89c0c0 0%, #89c0c0 100%);
+  font-weight: 700;
+  color: #333;
+}
+
+.utility-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.utility-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e8efee;
+  border-radius: 10px;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+  color: #0ea5a4;
+  background: linear-gradient(180deg, #fbfffe 0%, #f7fffd 100%);
+}
+
+.utility-slider {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .control-grid {
+    grid-template-columns: 1fr;
+  }
+  /* On small screens, make compact inputs full width again */
+  .compact-input {
+    flex: 1;
+    width: auto;
+    max-width: none;
+  }
+}
+
 </style>
