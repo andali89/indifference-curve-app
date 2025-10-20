@@ -2,7 +2,7 @@
   <section class="shared-controls">
     <h3 class="section-title">图表通用设置</h3>
 
-    <div class="control-group checkbox-group">
+    <div v-if="holdEnabledRef" class="control-group checkbox-group">
       <label class="checkbox-label">
         <input type="checkbox" v-model="local.hold" />
         <span>保持之前的曲线 (Hold)</span>
@@ -109,9 +109,10 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 function createDefaultState() {
+  
   return {
     hold: false,
     autoYAxis: false,
@@ -129,11 +130,17 @@ const props = defineProps({
   modelValue: {
     type: Object,
   },
+  holdEnabled: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
 const local = reactive({ ...createDefaultState(), ...(props.modelValue || {}) });
+
+const holdEnabledRef = computed(() => props.holdEnabled);
 
 watch(
   () => props.modelValue,
@@ -177,8 +184,16 @@ function setViewMode(mode) {
   local.viewMode = mode;
 }
 
+
+function resetDefaultState() {
+  const state = createDefaultState();
+  state.manualYMax = local.defaultYAxis.max;
+  state.manualYMin = local.defaultYAxis.min;
+  return state;
+}
+
 function reset() {
-  Object.assign(local, createDefaultState());
+  Object.assign(local, resetDefaultState());
 }
 </script>
 

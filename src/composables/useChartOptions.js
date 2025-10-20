@@ -1,12 +1,15 @@
 import { computed, unref } from 'vue';
 
-export function useChartOptions(seriesInput, yAxisInput, sharedInput) {
+export function useChartOptions(seriesInput, yAxisInput, sharedInput, axisLabelsInput) {
   return computed(() => {
     const series = unref(seriesInput) ?? [];
     const yAxis = normalizeAxis(unref(yAxisInput));
     const shared = normalizeShared(unref(sharedInput));
-    //  console.log('yAxisInput in useChartOptions:', yAxisInput);
-    // console.log('yAxis in useChartOptions:', yAxis);
+    const axisLabels = unref(axisLabelsInput) || {
+      xLabel: '闲暇时间 (小时)',
+      yLabel: '收入 (元)',
+    };
+    
     const legendData = series
       .map((s) => s?.name)
       .filter(Boolean);
@@ -21,9 +24,12 @@ export function useChartOptions(seriesInput, yAxisInput, sharedInput) {
           return params
             .map((param) => {
               const datum = param?.data ?? [];
-              const leisure = Array.isArray(datum) ? datum[0] : undefined;
-              const income = Array.isArray(datum) ? datum[1] : undefined;
-              return `${param.seriesName}<br/>闲暇: ${formatNumber(leisure)} 小时<br/>收入: ${formatNumber(income)} 元`;
+              const xValue = Array.isArray(datum) ? datum[0] : undefined;
+              const yValue = Array.isArray(datum) ? datum[1] : undefined;
+              // Extract label text without units for generic display
+              const xLabelText = axisLabels.xLabel.split(' ')[0] || 'X';
+              const yLabelText = axisLabels.yLabel.split(' ')[0] || 'Y';
+              return `${param.seriesName}<br/>${xLabelText}: ${formatNumber(xValue)}<br/>${yLabelText}: ${formatNumber(yValue)}`;
             })
             .join('<br/>');
         },
@@ -44,7 +50,7 @@ export function useChartOptions(seriesInput, yAxisInput, sharedInput) {
       },
       xAxis: {
         type: 'value',
-        name: '闲暇 (小时)',
+        name: axisLabels.xLabel,
         nameLocation: 'middle',
         nameGap: 35,
         nameTextStyle: {
@@ -62,7 +68,7 @@ export function useChartOptions(seriesInput, yAxisInput, sharedInput) {
       },
       yAxis: {
         type: 'value',
-        name: '收入 (元)',
+        name: axisLabels.yLabel,
         nameLocation: 'middle',
         nameGap: 45,
         nameTextStyle: {

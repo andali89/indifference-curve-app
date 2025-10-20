@@ -9,12 +9,14 @@
   >
     <div class="chart-header">
       <div>
-        <h1 class="chart-title">闲暇-收入曲线分析</h1>
-        <div class="chart-info">
-          <span class="info-chip">最大闲暇时间：16 小时</span>
-          <span class="info-chip">16 小时收入：{{ chartMeta.maxIncome?.toFixed?.(0) ?? 0 }} 元</span>
-          <span v-if="sharedControls.viewMode === 'wide'" class="info-chip">宽屏模式</span>
-        </div>
+        <h1 class="chart-title">{{ chartTitle }}</h1>
+        <component 
+          v-if="ChartInfoComponent" 
+          :is="ChartInfoComponent" 
+          :chartMeta="chartMeta"
+          :viewMode="sharedControls.viewMode"
+          :params="props.currentParams"
+        />
       </div>
       <button class="fullscreen-toggle" type="button" @click="toggleFullscreen">
         {{ isFullscreen ? '退出全屏' : '全屏' }}
@@ -58,6 +60,25 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  axisLabels: {
+    type: Object,
+    default: () => ({
+      xLabel: '闲暇时间 (小时)',
+      yLabel: '收入 (元)',
+    }),
+  },
+  chartTitle: {
+    type: String,
+    default: '闲暇-收入曲线分析',
+  },
+  ChartInfoComponent: {
+    type: Object,
+    default: null,
+  },
+  currentParams: {
+    type: Object,
+    default: () => ({}),
+  },
 });
 
 
@@ -81,8 +102,13 @@ const filteredSeries = computed(() =>
 
 // Wrap yAxis in computed to ensure reactivity when parent updates it
 const yAxisComputed = computed(() => props.yAxis);
-
-const chartOption = useChartOptions(filteredSeries, yAxisComputed, props.sharedControls);
+const axisLabelsComputed = computed(() => props.axisLabels);
+const chartOption = useChartOptions(
+  filteredSeries, 
+  yAxisComputed, 
+  props.sharedControls, 
+  axisLabelsComputed
+);
 
 const isAspectMode = computed(() => props.sharedControls.aspectRatioPreset !== 'auto');
 

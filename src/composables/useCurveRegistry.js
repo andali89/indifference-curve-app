@@ -1,8 +1,8 @@
 import { computed } from 'vue';
 import indifferenceCurve from '../curves/indifference/manifest.js';
-import indifferenceTest from '../curves/indifference_test/manifest.js';
+import supplyCurve from '../curves/supply-curve/manifest.js';
 
-const registry = [indifferenceCurve, indifferenceTest];
+const registry = [indifferenceCurve, supplyCurve];
 
 export function useCurveRegistry() {
   const curves = computed(() => registry);

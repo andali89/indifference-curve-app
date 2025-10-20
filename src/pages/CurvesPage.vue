@@ -1,5 +1,6 @@
 <template>
   <div class="curves-app">
+    
     <button
       class="sidebar-toggle"
       :class="{ 'sidebar-toggle--expanded': sidebarVisible }"
@@ -30,6 +31,7 @@
 
       <SharedControls
         :modelValue="sharedControls"
+        :holdEnabled="holdEnabledRef"
         @update:modelValue="applySharedControls"
       />
 
@@ -57,6 +59,10 @@
       :yAxis="yAxisRange"
       :sharedControls="sharedControls"
       :chartMeta="chartMeta"
+      :axisLabels="activeCurve.axisLabels"
+      :chartTitle="activeCurve.chartTitle || activeCurve.name"
+      :ChartInfoComponent="activeCurve.ChartInfoComponent"
+      :currentParams="activeParams"
     />
     
   </div>
@@ -73,6 +79,8 @@ import Footer from '../components/Footer.vue';
 import { useCurveRegistry } from '../composables/useCurveRegistry.js';
 import { useSidebarResize } from '../composables/useSidebarResize.js';
 import { useHoldStack } from '../composables/useHoldStack.js';
+
+
 
 const { curves, getCurve } = useCurveRegistry();
 const selectedCurveId = ref('');
@@ -104,6 +112,7 @@ const lastParams = ref(null);
 const yAxisRange = ref({ min: 0, max: 1200 });
 const chartMeta = ref({});
 const lastRecompute = ref(null);
+const holdEnabledRef = ref(true);
 
 function applySharedControls(next) {
   if (!next || typeof next !== 'object') {
@@ -138,7 +147,10 @@ const activeCurve = computed(() => getCurve(selectedCurveId.value));
 // ...existing code...
 watch(selectedCurveId, (newId, oldId) => {
   const curve = getCurve(newId);
+  
   if (!curve) return;
+  holdEnabledRef.value = curve?.holdEnabled ?? true;
+  console.log('[TTTTTTTTTTTTCurvesPage] holdEnabled', holdEnabledRef.value);
   // 初始化参数与 y 轴等（深拷贝）
   resetActiveParams(cloneParams(curve.defaultParams || {}));
   sharedControls.defaultYAxis = cloneParams(
@@ -203,7 +215,7 @@ const displaySeries = computed(() => {
   return [...heldSeries.value, ...resultSeries];
 });
 
-function recompute() {
+async function recompute() {
   const curve = activeCurve.value;
   if (!curve || typeof curve.computeSeries !== 'function') {
     return;
@@ -213,7 +225,8 @@ function recompute() {
   
   maybeAddHeldSeries(clonedParams);
 
-  const result = curve.computeSeries(clonedParams, {
+  // Await computeSeries in case it's async (like computeSupplySeries)
+  const result = await curve.computeSeries(clonedParams, {
     autoYAxis: sharedControls.autoYAxis,
     manualYMin: sharedControls.manualYMin,
     manualYMax: sharedControls.manualYMax,
