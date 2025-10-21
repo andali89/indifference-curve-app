@@ -1,70 +1,45 @@
 <template>
   <div class="curves-app">
-    
-    <button
-      class="sidebar-toggle"
-      :class="{ 'sidebar-toggle--expanded': sidebarVisible }"
-      type="button"
-      @click="sidebarVisible = !sidebarVisible"
-    >
+
+    <button class="sidebar-toggle" :class="{ 'sidebar-toggle--expanded': sidebarVisible }" type="button"
+      @click="sidebarVisible = !sidebarVisible">
       <span v-if="sidebarVisible">◀</span>
       <span v-else>▶</span>
     </button>
 
-    <aside
-      v-show="sidebarVisible"
-      class="sidebar"
-      :style="{ width: `${sidebarWidth}px` }"
-    >
-      <div class="sidebar-header">
-        <h2>{{ activeCurve.name }}分析</h2>
+    <aside v-show="sidebarVisible" class="sidebar" :style="{ width: `${sidebarWidth}px` }">
+
+
+
+      <div class="sidebar-body">
+        <div class="sidebar-header">
+          <h2>{{ activeCurve.name }}分析</h2>
+        </div>
+
+        <CurveSelector :curves="curves" v-model="selectedCurveId" />
+
+        <CurvePanel :key="selectedCurveId" :curve="activeCurve" :modelValue="activeParams"
+          @update:modelValue="updateActiveParams" />
+
+        <SharedControls :modelValue="sharedControls" :holdEnabled="holdEnabledRef"
+          @update:modelValue="applySharedControls" />
+
+        <button v-if="sharedControls.hold && heldSeries.length" class="clear-held" type="button"
+          @click="clearHeldSeries()">
+          清除保留曲线 ({{ heldSeries.length }})
+        </button>
+
       </div>
 
-      <CurveSelector :curves="curves" v-model="selectedCurveId" />
+      <div class="resize-handle" @mousedown.prevent="startResize" @touchstart.prevent="startResize"></div>
 
-      <CurvePanel
-        :key="selectedCurveId"
-        :curve="activeCurve"
-        :modelValue="activeParams"
-        @update:modelValue="updateActiveParams"
-      />
-
-      <SharedControls
-        :modelValue="sharedControls"
-        :holdEnabled="holdEnabledRef"
-        @update:modelValue="applySharedControls"
-      />
-
-      <button
-        v-if="sharedControls.hold && heldSeries.length"
-        class="clear-held"
-        type="button"
-        @click="clearHeldSeries()"
-      >
-        清除保留曲线 ({{ heldSeries.length }})
-      </button>
-
-      
-
-      <div
-        class="resize-handle"
-        @mousedown.prevent="startResize"
-        @touchstart.prevent="startResize"
-      ></div>
     </aside>
 
-    <ChartArea
-      class="curves-app__chart"
-      :series="displaySeries"
-      :yAxis="yAxisRange"
-      :sharedControls="sharedControls"
-      :chartMeta="chartMeta"
-      :axisLabels="activeCurve.axisLabels"
-      :chartTitle="activeCurve.chartTitle || activeCurve.name"
-      :ChartInfoComponent="activeCurve.ChartInfoComponent"
-      :currentParams="activeParams"
-    />
-    
+    <ChartArea class="curves-app__chart" :series="displaySeries" :yAxis="yAxisRange" :sharedControls="sharedControls"
+      :chartMeta="chartMeta" :axisLabels="activeCurve.axisLabels"
+      :chartTitle="activeCurve.chartTitle || activeCurve.name" :ChartInfoComponent="activeCurve.ChartInfoComponent"
+      :currentParams="activeParams" />
+
   </div>
   <Footer />
 </template>
@@ -95,7 +70,7 @@ const sharedControls = reactive({
   aspectRatioPreset: 'auto',
   aspectWidth: 16,
   aspectHeight: 9,
-  defaultYAxis: {min: 0, max: 1200},
+  defaultYAxis: { min: 0, max: 1200 },
 });
 
 const sidebarVisible = ref(true);
@@ -147,7 +122,7 @@ const activeCurve = computed(() => getCurve(selectedCurveId.value));
 // ...existing code...
 watch(selectedCurveId, (newId, oldId) => {
   const curve = getCurve(newId);
-  
+
   if (!curve) return;
   holdEnabledRef.value = curve?.holdEnabled ?? true;
   console.log('[TTTTTTTTTTTTCurvesPage] holdEnabled', holdEnabledRef.value);
@@ -222,7 +197,7 @@ async function recompute() {
   }
 
   const clonedParams = cloneParams(activeParams);
-  
+
   maybeAddHeldSeries(clonedParams);
 
   // Await computeSeries in case it's async (like computeSupplySeries)
@@ -301,11 +276,19 @@ function cloneParams(source) {
   max-width: 700px;
   background: white;
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
+  /* Make sidebar a fixed-height column; inner body will scroll */
   display: flex;
   flex-direction: column;
   position: relative;
   transition: width 0.3s ease;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar-body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .sidebar-header {
@@ -349,6 +332,7 @@ function cloneParams(source) {
   right: 0;
   top: 0;
   bottom: 0;
+  margin-right: 15px;
   width: 8px;
   cursor: ew-resize;
   background: transparent;
@@ -408,7 +392,7 @@ function cloneParams(source) {
   position: fixed;
   right: 12px;
   bottom: 12px;
-  background: rgba(255,255,255,0.95);
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid #e6e6e6;
   padding: 12px;
   font-size: 12px;
