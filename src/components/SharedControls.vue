@@ -2,7 +2,7 @@
   <section class="shared-controls">
     <h3 class="section-title">图表通用设置</h3>
 
-    <div v-if="holdEnabledRef" class="control-group checkbox-group">
+    <div v-if="props.holdEnabled" class="control-group checkbox-group">
       <label class="checkbox-label">
         <input type="checkbox" v-model="local.hold" />
         <span>保持之前的曲线 (Hold)</span>
@@ -139,8 +139,6 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const local = reactive({ ...createDefaultState(), ...(props.modelValue || {}) });
-
-const holdEnabledRef = computed(() => props.holdEnabled);
 
 watch(
   () => props.modelValue,
