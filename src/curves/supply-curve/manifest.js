@@ -8,10 +8,12 @@ export default {
   ControlsComponent: Controls,
   ChartInfoComponent: ChartInfo,
   defaultParams: {
+    utilityType: 'cobb-douglas',
     iWeight: 1,
     hWeight: 1,
+    satiationK: 200,
+    leisureGamma: 0.0335,
     unearnedIncome: 100,
-    utility: 100,
     wMin: 10,
     wMax: 100,
     defaultYAxis: { min: 0, max: 120 },
@@ -22,5 +24,5 @@ export default {
     yLabel: '工资率 (元/小时)',
   },
   chartTitle: '劳动供给曲线分析',
-  holdEnabled: false,  // Enable "Hold previous curve" feature
+  holdEnabled: false,
 };
