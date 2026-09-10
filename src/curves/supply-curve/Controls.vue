@@ -82,6 +82,11 @@
 <script setup>
 import { reactive, watch } from 'vue';
 
+const DEFAULT_W_MIN = {
+  'cobb-douglas': 10,
+  'satiating-income': 30,
+};
+
 const props = defineProps({
   modelValue: {
     type: Object,
@@ -101,12 +106,33 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 const local = reactive({ ...props.modelValue });
 
+// Keep a separate minimum-wage value for each utility model. This lets the
+// satiating-income teaching curve start at 30 while Cobb–Douglas remains at 10.
+const rememberedWMin = {
+  'cobb-douglas':
+    local.utilityType === 'cobb-douglas' ? local.wMin : DEFAULT_W_MIN['cobb-douglas'],
+  'satiating-income':
+    local.utilityType === 'satiating-income' ? local.wMin : DEFAULT_W_MIN['satiating-income'],
+};
+
 watch(
   () => props.modelValue,
   (value) => {
     Object.assign(local, value || {});
   },
   { deep: true }
+);
+
+watch(
+  () => local.utilityType,
+  (newType, oldType) => {
+    if (oldType && Object.hasOwn(DEFAULT_W_MIN, oldType)) {
+      rememberedWMin[oldType] = local.wMin;
+    }
+    if (Object.hasOwn(DEFAULT_W_MIN, newType)) {
+      local.wMin = rememberedWMin[newType] ?? DEFAULT_W_MIN[newType];
+    }
+  }
 );
 
 watch(
@@ -139,12 +165,12 @@ watch(
       local.unearnedIncome = 0;
     }
     if (!(clone.wMin > 0)) {
-      clone.wMin = 1;
-      local.wMin = 1;
+      clone.wMin = DEFAULT_W_MIN[clone.utilityType] ?? 1;
+      local.wMin = clone.wMin;
     }
     if (!(clone.wMax > clone.wMin)) {
       clone.wMax = clone.wMin + 10;
-      local.wMax = clone.wMin + 10;
+      local.wMax = clone.wMax;
     }
 
     emit('update:modelValue', clone);
