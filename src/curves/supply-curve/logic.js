@@ -147,15 +147,36 @@ export async function generateSupplyCurve(params, yAxisMax, step = 5) {
   const data = [];
   for (let wageRate = wMin; wageRate <= wMax; wageRate += step) {
     const result = await calOptimalWorkT({ ...params, wageRate });
-    if (result.success) {
-      data.push([result.optimum.workT, wageRate]);
+    if (!result.success) {
+      continue;
     }
+
+    const workHours = result.optimum.workT;
+
+    // For the satiating-income teaching curve, do not draw repeated
+    // zero-work corner solutions below the reservation wage. The underlying
+    // optimum remains zero; only the displayed supply curve starts when the
+    // worker first supplies positive labor.
+    if (
+      utilityType === UTILITY_MODELS.SATIATING_INCOME &&
+      !(workHours > 0)
+    ) {
+      continue;
+    }
+
+    data.push([workHours, wageRate]);
   }
 
   if (data.length > 0 && data[data.length - 1][1] !== wMax) {
     const result = await calOptimalWorkT({ ...params, wageRate: wMax });
     if (result.success) {
-      data.push([result.optimum.workT, wMax]);
+      const workHours = result.optimum.workT;
+      if (
+        utilityType !== UTILITY_MODELS.SATIATING_INCOME ||
+        workHours > 0
+      ) {
+        data.push([workHours, wMax]);
+      }
     }
   }
 
