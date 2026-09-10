@@ -1,30 +1,73 @@
 <template>
   <div class="indifference-controls">
     <section class="control-section">
-      <h3>效用函数参数</h3>
-      <div class="control-grid">
-        <div class="control-item">
-          <label for="i-weight">收入权重 (I)</label>
-          <input
-            id="i-weight"
-            type="number"
-            min="0.1"
-            step="0.1"
-            v-model.number="local.iWeight"
-          />
-        </div>
-        <div class="control-item">
-          <label for="h-weight">闲暇权重 (H)</label>
-          <input
-            id="h-weight"
-            type="number"
-            min="0.1"
-            step="0.1"
-            v-model.number="local.hWeight"
-          />
-        </div>
+      <h3>效用函数</h3>
+      <div class="control-item">
+        <label for="utility-type">效用函数类型</label>
+        <select id="utility-type" v-model="local.utilityType">
+          <option value="cobb-douglas">Cobb–Douglas</option>
+          <option value="satiating-income">收入边际效用递减型</option>
+        </select>
       </div>
-      <div class="formula">U = I<sup>{{ local.iWeight }}</sup> × H<sup>{{ local.hWeight }}</sup></div>
+
+      <template v-if="local.utilityType === 'cobb-douglas'">
+        <div class="control-grid">
+          <div class="control-item">
+            <label for="i-weight">收入权重 (α)</label>
+            <input
+              id="i-weight"
+              type="number"
+              min="0.1"
+              step="0.1"
+              v-model.number="local.iWeight"
+            />
+          </div>
+          <div class="control-item">
+            <label for="h-weight">闲暇权重 (β)</label>
+            <input
+              id="h-weight"
+              type="number"
+              min="0.1"
+              step="0.1"
+              v-model.number="local.hWeight"
+            />
+          </div>
+        </div>
+        <div class="formula">
+          U = I<sup>{{ local.iWeight }}</sup> × H<sup>{{ local.hWeight }}</sup>
+        </div>
+      </template>
+
+      <template v-else>
+        <div class="control-grid">
+          <div class="control-item">
+            <label for="satiation-k">收入边际效用递减速度 (K)</label>
+            <input
+              id="satiation-k"
+              type="number"
+              min="1"
+              step="10"
+              v-model.number="local.satiationK"
+            />
+          </div>
+          <div class="control-item">
+            <label for="leisure-gamma">闲暇价值 (γ)</label>
+            <input
+              id="leisure-gamma"
+              type="number"
+              min="0.0001"
+              step="0.001"
+              v-model.number="local.leisureGamma"
+            />
+          </div>
+        </div>
+        <div class="formula">
+          U = 1 − e<sup>−I/{{ local.satiationK }}</sup> + {{ local.leisureGamma }}H
+        </div>
+        <p class="formula-note">
+          I 为收入，H 为闲暇时间。该模型可在高工资区间体现收入效应占主导时的向后弯曲劳动供给。
+        </p>
+      </template>
     </section>
 
     <section class="control-section">
@@ -60,8 +103,6 @@
             <span class="unit">元/小时</span>
           </div>
         </div>
-        </div>
-        <div class="control-grid">
         <div class="control-item">
           <label for="w-max">最高工资率</label>
           <div class="input-with-unit">
@@ -77,8 +118,6 @@
         </div>
       </div>
     </section>
-
-    
   </div>
 </template>
 
@@ -89,10 +128,12 @@ const props = defineProps({
   modelValue: {
     type: Object,
     default: () => ({
+      utilityType: 'cobb-douglas',
       iWeight: 1,
       hWeight: 1,
-      unearnedIncome: 0,
-      utility: 100,
+      satiationK: 200,
+      leisureGamma: 0.0335,
+      unearnedIncome: 100,
       wMin: 10,
       wMax: 100,
     }),
@@ -115,9 +156,10 @@ watch(
   local,
   (value) => {
     const clone = { ...value };
-    if (!(clone.utility >= 100)) {
-      clone.utility = 100;
-      local.utility = 100;
+
+    if (!['cobb-douglas', 'satiating-income'].includes(clone.utilityType)) {
+      clone.utilityType = 'cobb-douglas';
+      local.utilityType = 'cobb-douglas';
     }
     if (!(clone.iWeight > 0)) {
       clone.iWeight = 0.1;
@@ -127,6 +169,18 @@ watch(
       clone.hWeight = 0.1;
       local.hWeight = 0.1;
     }
+    if (!(clone.satiationK > 0)) {
+      clone.satiationK = 200;
+      local.satiationK = 200;
+    }
+    if (!(clone.leisureGamma > 0)) {
+      clone.leisureGamma = 0.0335;
+      local.leisureGamma = 0.0335;
+    }
+    if (!(clone.unearnedIncome >= 0)) {
+      clone.unearnedIncome = 0;
+      local.unearnedIncome = 0;
+    }
     if (!(clone.wMin > 0)) {
       clone.wMin = 1;
       local.wMin = 1;
@@ -135,7 +189,7 @@ watch(
       clone.wMax = clone.wMin + 10;
       local.wMax = clone.wMin + 10;
     }
-    console.log('[Controls] emit update:modelValue', clone);
+
     emit('update:modelValue', clone);
   },
   { deep: true }
@@ -182,11 +236,15 @@ label {
   font-weight: 500;
 }
 
-input[type='number'] {
+input[type='number'],
+select {
+  box-sizing: border-box;
+  width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d2d2d7;
   font-size: 14px;
+  background: #fff;
 }
 
 .input-with-unit {
@@ -205,13 +263,6 @@ input[type='number'] {
   min-width: 50px;
 }
 
-/* Compact wage inputs so they don't stretch too wide in the sidebar */
-.compact-input {
-  flex: 0 0 120px; /* fixed base width */
-  width: 120px;
-  max-width: 180px;
-}
-
 .formula {
   padding: 12px;
   border-radius: 8px;
@@ -221,39 +272,16 @@ input[type='number'] {
   color: #333;
 }
 
-.utility-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.utility-input {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #e8efee;
-  border-radius: 10px;
-  font-size: 20px;
-  font-weight: 600;
-  text-align: center;
-  color: #0ea5a4;
-  background: linear-gradient(180deg, #fbfffe 0%, #f7fffd 100%);
-}
-
-.utility-slider {
-  width: 100%;
+.formula-note {
+  margin: -4px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #666;
 }
 
 @media (max-width: 900px) {
   .control-grid {
     grid-template-columns: 1fr;
   }
-  /* On small screens, make compact inputs full width again */
-  .compact-input {
-    flex: 1;
-    width: auto;
-    max-width: none;
-  }
 }
-
 </style>
