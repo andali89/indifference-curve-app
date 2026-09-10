@@ -14,23 +14,11 @@
         <div class="control-grid">
           <div class="control-item">
             <label for="i-weight">收入权重 (α)</label>
-            <input
-              id="i-weight"
-              type="number"
-              min="0.1"
-              step="0.1"
-              v-model.number="local.iWeight"
-            />
+            <input id="i-weight" type="number" min="0.1" step="0.1" v-model.number="local.iWeight" />
           </div>
           <div class="control-item">
             <label for="h-weight">闲暇权重 (β)</label>
-            <input
-              id="h-weight"
-              type="number"
-              min="0.1"
-              step="0.1"
-              v-model.number="local.hWeight"
-            />
+            <input id="h-weight" type="number" min="0.1" step="0.1" v-model.number="local.hWeight" />
           </div>
         </div>
         <div class="formula">
@@ -42,23 +30,11 @@
         <div class="control-grid">
           <div class="control-item">
             <label for="satiation-k">收入边际效用递减速度 (K)</label>
-            <input
-              id="satiation-k"
-              type="number"
-              min="1"
-              step="10"
-              v-model.number="local.satiationK"
-            />
+            <input id="satiation-k" type="number" min="1" step="10" v-model.number="local.satiationK" />
           </div>
           <div class="control-item">
             <label for="leisure-gamma">闲暇价值 (γ)</label>
-            <input
-              id="leisure-gamma"
-              type="number"
-              min="0.0001"
-              step="0.001"
-              v-model.number="local.leisureGamma"
-            />
+            <input id="leisure-gamma" type="number" min="0.0001" step="0.001" v-model.number="local.leisureGamma" />
           </div>
         </div>
         <div class="formula">
@@ -75,13 +51,7 @@
       <div class="control-item">
         <label for="unearned-income">非劳动收入</label>
         <div class="input-with-unit">
-          <input
-            id="unearned-income"
-            type="number"
-            min="0"
-            step="50"
-            v-model.number="local.unearnedIncome"
-          />
+          <input id="unearned-income" type="number" min="0" step="50" v-model.number="local.unearnedIncome" />
           <span class="unit">元</span>
         </div>
       </div>
@@ -93,26 +63,14 @@
         <div class="control-item">
           <label for="w-min">最低工资率</label>
           <div class="input-with-unit">
-            <input
-              id="w-min"
-              type="number"
-              min="1"
-              step="5"
-              v-model.number="local.wMin"
-            />
+            <input id="w-min" type="number" min="1" step="5" v-model.number="local.wMin" />
             <span class="unit">元/小时</span>
           </div>
         </div>
         <div class="control-item">
           <label for="w-max">最高工资率</label>
           <div class="input-with-unit">
-            <input
-              id="w-max"
-              type="number"
-              min="10"
-              step="10"
-              v-model.number="local.wMax"
-            />
+            <input id="w-max" type="number" min="10" step="10" v-model.number="local.wMax" />
             <span class="unit">元/小时</span>
           </div>
         </div>
@@ -131,8 +89,8 @@ const props = defineProps({
       utilityType: 'cobb-douglas',
       iWeight: 1,
       hWeight: 1,
-      satiationK: 200,
-      leisureGamma: 0.0335,
+      satiationK: 660,
+      leisureGamma: 0.029,
       unearnedIncome: 100,
       wMin: 10,
       wMax: 100,
@@ -141,7 +99,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue']);
-
 const local = reactive({ ...props.modelValue });
 
 watch(
@@ -170,12 +127,12 @@ watch(
       local.hWeight = 0.1;
     }
     if (!(clone.satiationK > 0)) {
-      clone.satiationK = 200;
-      local.satiationK = 200;
+      clone.satiationK = 660;
+      local.satiationK = 660;
     }
     if (!(clone.leisureGamma > 0)) {
-      clone.leisureGamma = 0.0335;
-      local.leisureGamma = 0.0335;
+      clone.leisureGamma = 0.029;
+      local.leisureGamma = 0.029;
     }
     if (!(clone.unearnedIncome >= 0)) {
       clone.unearnedIncome = 0;
