@@ -32,10 +32,6 @@ export function optimalWorkHoursCobbDouglas(params = {}) {
 
   const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
   const totalWeight = iWeight + hWeight;
-
-  // U = I^alpha * H^beta, where H is leisure.
-  // Closed-form optimal work hours:
-  // work = alpha/(alpha+beta) * T - beta/(alpha+beta) * V/w.
   const workHours =
     (iWeight / totalWeight) * TOTAL_AVAILABLE_HOURS -
     (hWeight / totalWeight) * (nonLaborIncome / wageRate);
@@ -47,8 +43,8 @@ export function optimalWorkHoursSatiating(params = {}) {
   const {
     wageRate = 50,
     unearnedIncome = 100,
-    satiationK = 200,
-    leisureGamma = 0.0335,
+    satiationK = 660,
+    leisureGamma = 0.029,
   } = params;
 
   if (!(wageRate > 0) || !(satiationK > 0) || !(leisureGamma > 0)) {
@@ -56,10 +52,6 @@ export function optimalWorkHoursSatiating(params = {}) {
   }
 
   const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
-
-  // U = 1 - exp(-I/K) + gamma * H, where H is leisure.
-  // With I = V + w * work, the interior solution is
-  // work = [K * ln(w / (gamma*K)) - V] / w.
   const workHours =
     (satiationK * Math.log(wageRate / (leisureGamma * satiationK)) - nonLaborIncome) /
     wageRate;
@@ -70,8 +62,8 @@ export function optimalWorkHoursSatiating(params = {}) {
 export function getSatiatingTurningWage(params = {}) {
   const {
     unearnedIncome = 100,
-    satiationK = 200,
-    leisureGamma = 0.0335,
+    satiationK = 660,
+    leisureGamma = 0.029,
   } = params;
 
   if (!(satiationK > 0) || !(leisureGamma > 0)) {
@@ -92,8 +84,8 @@ function calculateUtility(params, workHours) {
     unearnedIncome = 100,
     iWeight = 1,
     hWeight = 1,
-    satiationK = 200,
-    leisureGamma = 0.0335,
+    satiationK = 660,
+    leisureGamma = 0.029,
   } = params;
 
   const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
@@ -108,10 +100,7 @@ function calculateUtility(params, workHours) {
 }
 
 export async function calOptimalWorkT(params = {}) {
-  const {
-    utilityType = UTILITY_MODELS.COBB_DOUGLAS,
-  } = params;
-
+  const { utilityType = UTILITY_MODELS.COBB_DOUGLAS } = params;
   const workHours = utilityType === UTILITY_MODELS.SATIATING_INCOME
     ? optimalWorkHoursSatiating(params)
     : optimalWorkHoursCobbDouglas(params);
@@ -131,8 +120,8 @@ export async function generateSupplyCurve(params, yAxisMax, step = 5) {
     utilityType = UTILITY_MODELS.COBB_DOUGLAS,
     iWeight = 1,
     hWeight = 1,
-    satiationK = 200,
-    leisureGamma = 0.0335,
+    satiationK = 660,
+    leisureGamma = 0.029,
     wMin = 10,
     wMax = 100,
   } = params;
@@ -163,7 +152,6 @@ export async function generateSupplyCurve(params, yAxisMax, step = 5) {
     }
   }
 
-  // Ensure the exact upper bound is represented when the step does not land on it.
   if (data.length > 0 && data[data.length - 1][1] !== wMax) {
     const result = await calOptimalWorkT({ ...params, wageRate: wMax });
     if (result.success) {
@@ -224,7 +212,8 @@ export async function computeSupplySeries(params, sharedOptions = {}) {
     meta: {
       wageRange: `${wMin} - ${wMax}`,
       utilityType,
-      utilityModelName: UTILITY_MODEL_NAMES[utilityType] || UTILITY_MODEL_NAMES[UTILITY_MODELS.COBB_DOUGLAS],
+      utilityModelName:
+        UTILITY_MODEL_NAMES[utilityType] || UTILITY_MODEL_NAMES[UTILITY_MODELS.COBB_DOUGLAS],
       turningWage,
       turningPointVisible:
         turningWage !== null && turningWage >= wMin && turningWage <= wMax,
