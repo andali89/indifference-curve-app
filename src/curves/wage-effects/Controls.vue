@@ -1,0 +1,267 @@
+<template>
+  <div class="wage-effects-controls">
+    <section class="control-section">
+      <h3>效用函数</h3>
+      <div class="control-item">
+        <label for="utility-type">效用函数类型</label>
+        <select id="utility-type" :value="modelValue.utilityType" @change="emitPatch({ utilityType: $event.target.value })">
+          <option value="cobb-douglas">Cobb–Douglas</option>
+          <option value="satiating-income">收入边际效用递减型</option>
+        </select>
+      </div>
+      <div v-if="modelValue.utilityType !== 'satiating-income'" class="control-grid">
+        <div class="control-item">
+          <label for="i-weight">收入权重 (α)</label>
+          <input id="i-weight" type="number" min="0.1" step="0.1" :value="modelValue.iWeight" @input="updateNumber('iWeight', $event.target.value)" />
+        </div>
+        <div class="control-item">
+          <label for="h-weight">闲暇权重 (β)</label>
+          <input id="h-weight" type="number" min="0.1" step="0.1" :value="modelValue.hWeight" @input="updateNumber('hWeight', $event.target.value)" />
+        </div>
+      </div>
+      <div v-else class="control-grid">
+        <div class="control-item">
+          <label for="satiation-k">收入边际效用递减速度 (K)</label>
+          <input id="satiation-k" type="number" min="1" step="10" :value="modelValue.satiationK" @input="updateNumber('satiationK', $event.target.value)" />
+        </div>
+        <div class="control-item">
+          <label for="leisure-gamma">闲暇价值 (γ)</label>
+          <input id="leisure-gamma" type="number" min="0.0001" step="0.001" :value="modelValue.leisureGamma" @input="updateNumber('leisureGamma', $event.target.value)" />
+        </div>
+      </div>
+      <div class="assumption-card utility-formula">
+        <span v-if="modelValue.utilityType !== 'satiating-income'">U = I<sup>{{ modelValue.iWeight }}</sup> × H<sup>{{ modelValue.hWeight }}</sup></span>
+        <span v-else>U = 1 − e<sup>−I/{{ modelValue.satiationK }}</sup> + {{ modelValue.leisureGamma }}H</span>
+      </div>
+    </section>
+
+    <section class="control-section">
+      <h3>工资变化</h3>
+      <div class="control-grid">
+        <div class="control-item">
+          <label for="initial-wage">初始工资率</label>
+          <div class="input-with-unit">
+            <input
+              id="initial-wage"
+              type="number"
+              min="1"
+              step="10"
+              :value="modelValue.initialWage"
+              @input="updateNumber('initialWage', $event.target.value)"
+            />
+            <span class="unit">元/小时</span>
+          </div>
+        </div>
+
+        <div class="control-item">
+          <label for="new-wage">新工资率</label>
+          <div class="input-with-unit">
+            <input
+              id="new-wage"
+              type="number"
+              min="1"
+              step="10"
+              :value="modelValue.newWage"
+              @input="updateNumber('newWage', $event.target.value)"
+            />
+            <span class="unit">元/小时</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="control-section">
+      <h3>演示步骤</h3>
+      <div class="stage-buttons">
+        <button
+          v-for="item in stages"
+          :key="item.value"
+          type="button"
+          class="stage-button"
+          :class="{ 'stage-button--active': currentStage === item.value }"
+          @click="updateStage(item.value)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+      <p class="stage-description">{{ activeStageDescription }}</p>
+    </section>
+
+    <section class="assumption-card">
+      <div><strong>可支配时间：</strong>16 小时</div>
+      <div><strong>非劳动收入：</strong>100 元</div>
+    </section>
+  </div>
+</template>
+
+<script setup>
+import { computed } from 'vue';
+import { UTILITY_DEFAULTS } from '../utilityModels.js';
+
+const props = defineProps({
+  modelValue: {
+    type: Object,
+    default: () => ({
+      ...UTILITY_DEFAULTS,
+      initialWage: 50,
+      newWage: 100,
+      stage: 1,
+    }),
+  },
+});
+
+const emit = defineEmits(['update:modelValue']);
+
+const stages = [
+  { value: 1, label: '1 初始状态', description: '先观察初始预算线、无差异曲线与最优点 A。' },
+  { value: 2, label: '2 工资变化', description: '加入新预算线与新最优点 C，观察工资变化后的总效应。' },
+  { value: 3, label: '3 效应分解', description: '补偿线平行于旧预算线、达到新效用。沿横轴投影观察：A→B 收入效应，B→C 替代效应。' },
+];
+
+const currentStage = computed(() => {
+  const stage = Number(props.modelValue?.stage);
+  return [1, 2, 3].includes(stage) ? stage : 1;
+});
+
+const activeStageDescription = computed(() => {
+  return stages.find((item) => item.value === currentStage.value)?.description || stages[0].description;
+});
+
+function emitPatch(patch) {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    ...patch,
+  });
+}
+
+function updateStage(stage) {
+  emitPatch({ stage });
+}
+
+function updateNumber(key, value) {
+  const number = Number(value);
+  const fallback = { ...UTILITY_DEFAULTS, initialWage: 1, newWage: 1 }[key];
+  emitPatch({ [key]: Number.isFinite(number) && number > 0 ? number : fallback });
+}
+</script>
+
+<style scoped>
+.wage-effects-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.control-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+input[type='number'], select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #d2d2d7;
+  font-size: 14px;
+  background: #fff;
+}
+
+.input-with-unit input {
+  flex: 1;
+}
+
+.utility-formula {
+  text-align: center;
+  font-weight: 600;
+}
+
+.unit {
+  min-width: 50px;
+  font-size: 13px;
+  color: #666;
+}
+
+.stage-buttons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.stage-button {
+  padding: 10px 12px;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  background: #fff;
+  color: #333;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-button--active {
+  border-color: #0f766e;
+  background: #f0fdfa;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.stage-description {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #666;
+}
+
+.assumption-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .control-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

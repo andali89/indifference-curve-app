@@ -108,7 +108,6 @@ function updateActiveParams(next) {
     return;
   }
   Object.assign(activeParams, next);
-  console.log('[CurvesPage] activeParams updated:', { ...activeParams });
 }
 
 watchEffect(() => {
@@ -125,7 +124,6 @@ watch(selectedCurveId, (newId, oldId) => {
 
   if (!curve) return;
   holdEnabledRef.value = curve?.holdEnabled ?? true;
-  console.log('[TTTTTTTTTTTTCurvesPage] holdEnabled', holdEnabledRef.value);
   // 初始化参数与 y 轴等（深拷贝）
   resetActiveParams(cloneParams(curve.defaultParams || {}));
   sharedControls.defaultYAxis = cloneParams(
@@ -133,7 +131,6 @@ watch(selectedCurveId, (newId, oldId) => {
   );
   sharedControls.manualYMax = sharedControls.defaultYAxis.max;
   sharedControls.manualYMin = sharedControls.defaultYAxis.min;
-  console.log('[CurvesPage] Selected curve changed:', newId, curve);
   // 其它初始化与首次绘图
   clearHeldSeries();
   currentResult.value = null;
@@ -207,12 +204,9 @@ async function recompute() {
     manualYMax: sharedControls.manualYMax,
   });
 
-  console.log('sharedControls.autoYAxis:', sharedControls.autoYAxis);
   currentResult.value = result;
-  console.log('[11111111] currentResult:', currentResult.value);
   chartMeta.value = result?.meta || {};
   yAxisRange.value = result?.axis || { min: 0, max: 1200 };
-  console.log('yAxisRange:', yAxisRange.value);
   lastParams.value = clonedParams;
   lastRecompute.value = new Date().toISOString();
 }

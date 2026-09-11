@@ -29,7 +29,12 @@
         :class="{ 'chart-wrapper--fixed': isAspectMode }"
         :style="wrapperStyle"
       >
-        <v-chart class="chart" :option="chartOption" autoresize />
+        <v-chart
+          class="chart"
+          :option="chartOption"
+          :update-options="chartUpdateOptions"
+          autoresize
+        />
       </div>
     </div>
   </div>
@@ -39,9 +44,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useChartOptions } from '../composables/useChartOptions.js';
 import { useFullscreen } from '../composables/useFullscreen.js';
-
-
-
 
 const props = defineProps({
   series: {
@@ -81,17 +83,15 @@ const props = defineProps({
   },
 });
 
-
-
-
-
-
 const chartAreaRef = ref(null);
 const chartContainerRef = ref(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
 let resizeObserver;
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(chartAreaRef);
+
+// Structural chart changes should replace the existing ECharts option.
+const chartUpdateOptions = { notMerge: true };
 
 const filteredSeries = computed(() =>
   (props.series || []).map((item) => {
@@ -104,27 +104,20 @@ const filteredSeries = computed(() =>
 const yAxisComputed = computed(() => props.yAxis);
 const axisLabelsComputed = computed(() => props.axisLabels);
 const chartOption = useChartOptions(
-  filteredSeries, 
-  yAxisComputed, 
-  props.sharedControls, 
+  filteredSeries,
+  yAxisComputed,
+  props.sharedControls,
   axisLabelsComputed
 );
 
 const isAspectMode = computed(() => props.sharedControls.aspectRatioPreset !== 'auto');
 
-
 // Calculate optimal size to fit container while maintaining aspect ratio
 const chartDimensions = computed(() => {
-  
   const preset = props.sharedControls?.aspectRatioPreset ?? 'auto';
   if (preset === 'auto') {
     return null;
   }
-  console.log('[ChartArea] chartDimensions: aspect mode', {
-    preset: props.sharedControls.aspectRatioPreset,
-    ratio: `${props.sharedControls.aspectWidth}:${props.sharedControls.aspectHeight}`,
-    container: `${containerWidth.value}x${containerHeight.value}`
-  });
   const padding = (props.sharedControls && typeof props.sharedControls.chartPadding === 'number')
     ? props.sharedControls.chartPadding * 2
     : 20;
@@ -197,7 +190,6 @@ const wrapperStyle = computed(() => {
     width: '100%'
   };
 });
-
 
 function updateContainerSize() {
   if (!chartContainerRef.value) return;
