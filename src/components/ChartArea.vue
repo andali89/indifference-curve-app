@@ -29,7 +29,12 @@
         :class="{ 'chart-wrapper--fixed': isAspectMode }"
         :style="wrapperStyle"
       >
-        <v-chart class="chart" :option="chartOption" autoresize />
+        <v-chart
+          class="chart"
+          :option="chartOption"
+          :update-options="chartUpdateOptions"
+          autoresize
+        />
       </div>
     </div>
   </div>
@@ -39,9 +44,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useChartOptions } from '../composables/useChartOptions.js';
 import { useFullscreen } from '../composables/useFullscreen.js';
-
-
-
 
 const props = defineProps({
   series: {
@@ -81,17 +83,18 @@ const props = defineProps({
   },
 });
 
-
-
-
-
-
 const chartAreaRef = ref(null);
 const chartContainerRef = ref(null);
 const containerWidth = ref(0);
 const containerHeight = ref(0);
 let resizeObserver;
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(chartAreaRef);
+
+// These teaching charts are small, and some modules intentionally change the
+// number and type of series as the user steps through an explanation. Replacing
+// the ECharts option avoids stale merged series and makes parameter changes
+// immediately visible.
+const chartUpdateOptions = { notMerge: true };
 
 const filteredSeries = computed(() =>
   (props.series || []).map((item) => {
@@ -104,18 +107,16 @@ const filteredSeries = computed(() =>
 const yAxisComputed = computed(() => props.yAxis);
 const axisLabelsComputed = computed(() => props.axisLabels);
 const chartOption = useChartOptions(
-  filteredSeries, 
-  yAxisComputed, 
-  props.sharedControls, 
+  filteredSeries,
+  yAxisComputed,
+  props.sharedControls,
   axisLabelsComputed
 );
 
 const isAspectMode = computed(() => props.sharedControls.aspectRatioPreset !== 'auto');
 
-
 // Calculate optimal size to fit container while maintaining aspect ratio
 const chartDimensions = computed(() => {
-  
   const preset = props.sharedControls?.aspectRatioPreset ?? 'auto';
   if (preset === 'auto') {
     return null;
@@ -197,7 +198,6 @@ const wrapperStyle = computed(() => {
     width: '100%'
   };
 });
-
 
 function updateContainerSize() {
   if (!chartContainerRef.value) return;
