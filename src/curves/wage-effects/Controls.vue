@@ -11,7 +11,8 @@
               type="number"
               min="1"
               step="10"
-              v-model.number="local.initialWage"
+              :value="modelValue.initialWage"
+              @input="updateNumber('initialWage', $event.target.value)"
             />
             <span class="unit">元/小时</span>
           </div>
@@ -25,7 +26,8 @@
               type="number"
               min="1"
               step="10"
-              v-model.number="local.newWage"
+              :value="modelValue.newWage"
+              @input="updateNumber('newWage', $event.target.value)"
             />
             <span class="unit">元/小时</span>
           </div>
@@ -41,8 +43,8 @@
           :key="item.value"
           type="button"
           class="stage-button"
-          :class="{ 'stage-button--active': local.stage === item.value }"
-          @click="local.stage = item.value"
+          :class="{ 'stage-button--active': currentStage === item.value }"
+          @click="updateStage(item.value)"
         >
           {{ item.label }}
         </button>
@@ -59,7 +61,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, watch } from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -80,42 +82,30 @@ const stages = [
   { value: 3, label: '3 效应分解', description: '加入 Hicks 补偿线与点 B，将总效应分解为替代效应和收入效应。' },
 ];
 
-const local = reactive({ ...props.modelValue });
-
-const activeStageDescription = computed(() => {
-  return stages.find((item) => item.value === local.stage)?.description || stages[0].description;
+const currentStage = computed(() => {
+  const stage = Number(props.modelValue?.stage);
+  return [1, 2, 3].includes(stage) ? stage : 1;
 });
 
-watch(
-  () => props.modelValue,
-  (value) => {
-    Object.assign(local, value || {});
-  },
-  { deep: true }
-);
+const activeStageDescription = computed(() => {
+  return stages.find((item) => item.value === currentStage.value)?.description || stages[0].description;
+});
 
-watch(
-  local,
-  (value) => {
-    const clone = { ...value };
+function emitPatch(patch) {
+  emit('update:modelValue', {
+    ...props.modelValue,
+    ...patch,
+  });
+}
 
-    if (!(clone.initialWage > 0)) {
-      clone.initialWage = 1;
-      local.initialWage = 1;
-    }
-    if (!(clone.newWage > 0)) {
-      clone.newWage = 1;
-      local.newWage = 1;
-    }
-    if (![1, 2, 3].includes(clone.stage)) {
-      clone.stage = 1;
-      local.stage = 1;
-    }
+function updateStage(stage) {
+  emitPatch({ stage });
+}
 
-    emit('update:modelValue', clone);
-  },
-  { deep: true }
-);
+function updateNumber(key, value) {
+  const number = Number(value);
+  emitPatch({ [key]: number > 0 ? number : 1 });
+}
 </script>
 
 <style scoped>
