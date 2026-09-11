@@ -30,7 +30,6 @@
         :style="wrapperStyle"
       >
         <v-chart
-          :key="chartInstanceKey"
           class="chart"
           :option="chartOption"
           :update-options="chartUpdateOptions"
@@ -94,14 +93,6 @@ const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(chartAreaRef);
 // Structural chart changes should replace the existing ECharts option.
 const chartUpdateOptions = { notMerge: true };
 
-// The wage-effect teaching module changes chart structure between stages.
-// Remount only for that stage transition so ECharts starts from the complete
-// option for the selected teaching step. Other charts keep the same instance.
-const chartInstanceKey = computed(() => {
-  const stage = Number(props.chartMeta?.stage);
-  return Number.isFinite(stage) ? `teaching-stage-${stage}` : 'default-chart';
-});
-
 const filteredSeries = computed(() =>
   (props.series || []).map((item) => {
     const { meta, ...rest } = item || {};
@@ -127,11 +118,6 @@ const chartDimensions = computed(() => {
   if (preset === 'auto') {
     return null;
   }
-  console.log('[ChartArea] chartDimensions: aspect mode', {
-    preset: props.sharedControls.aspectRatioPreset,
-    ratio: `${props.sharedControls.aspectWidth}:${props.sharedControls.aspectHeight}`,
-    container: `${containerWidth.value}x${containerHeight.value}`
-  });
   const padding = (props.sharedControls && typeof props.sharedControls.chartPadding === 'number')
     ? props.sharedControls.chartPadding * 2
     : 20;

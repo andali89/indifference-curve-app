@@ -8,6 +8,7 @@ import {
 } from 'echarts/renderers';
 import {
   LineChart,
+  ScatterChart,
   BarChart
 } from 'echarts/charts';
 import {
@@ -19,6 +20,7 @@ import {
 use([
   CanvasRenderer,
   LineChart,
+  ScatterChart,
   BarChart,
   GridComponent,
   TooltipComponent,
