@@ -105,74 +105,44 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
   const stage = normalizeStage(params.stage);
   const result = calculateDecompositionRaw(params);
   const axis = calculateAxis(result, stage, autoYAxis, manualYMin, manualYMax);
-  const showWageChange = stage >= 2;
-  const showDecomposition = stage >= 3;
-  const span = axis.max - axis.min;
+  const series = [];
 
-  // Keep a fixed series structure with stable ids. Only the data and labels of
-  // later teaching stages are toggled. This prevents ECharts from having to
-  // reconcile a changing number of series when moving between stages.
-  const series = [
-    makeLineSeries(
-      'initial-budget',
-      '初始预算线',
-      generateBudgetLine(result.initialWage),
-      '#0066cc',
-      3
-    ),
-    makeLineSeries(
-      'initial-utility',
-      '初始无差异曲线 U₀',
-      generateIndifferenceCurve(result.pointA.utility, axis.max),
-      '#dc2626',
-      2.5,
-      'solid',
-      true
-    ),
-    makePointSeries('point-a', 'A', result.pointA),
+  series.push(
+    makeLineSeries('初始预算线', generateBudgetLine(result.initialWage), '#0066cc', 3),
+    makeLineSeries('初始无差异曲线 U₀', generateIndifferenceCurve(result.pointA.utility, axis.max), '#dc2626', 2.5, 'solid', true),
+    makePointSeries('A', result.pointA)
+  );
 
-    makeLineSeries(
-      'new-budget',
-      showWageChange ? '新预算线' : '',
-      showWageChange ? generateBudgetLine(result.newWage) : [],
-      '#0f766e',
-      3
-    ),
-    makeLineSeries(
-      'new-utility',
-      showWageChange ? '新无差异曲线 U₁' : '',
-      showWageChange ? generateIndifferenceCurve(result.pointC.utility, axis.max) : [],
-      '#ea580c',
-      2.5,
-      'solid',
-      true
-    ),
-    makePointSeries('point-c', showWageChange ? 'C' : '', showWageChange ? result.pointC : null),
+  if (stage >= 2) {
+    series.push(
+      makeLineSeries('新预算线', generateBudgetLine(result.newWage), '#0f766e', 3),
+      makeLineSeries('新无差异曲线 U₁', generateIndifferenceCurve(result.pointC.utility, axis.max), '#ea580c', 2.5, 'solid', true),
+      makePointSeries('C', result.pointC)
+    );
+  }
 
-    makeLineSeries(
-      'hicks-budget',
-      showDecomposition ? 'Hicks 补偿线' : '',
-      showDecomposition ? generateCompensatedBudgetLine(result.pointB, result.newWage) : [],
-      '#0f766e',
-      2.5,
-      'dashed'
-    ),
-    makePointSeries('point-b', showDecomposition ? 'B' : '', showDecomposition ? result.pointB : null),
-    makeEffectGuide(
-      'substitution-guide',
-      showDecomposition ? result.pointA.leisure : null,
-      showDecomposition ? result.pointB.leisure : null,
+  if (stage >= 3) {
+    series.push(
+      makeLineSeries('Hicks 补偿线', generateCompensatedBudgetLine(result.pointB, result.newWage), '#0f766e', 2.5, 'dashed'),
+      makePointSeries('B', result.pointB)
+    );
+
+    const span = axis.max - axis.min;
+    const substitutionGuide = makeEffectGuide(
+      result.pointA.leisure,
+      result.pointB.leisure,
       axis.min + span * 0.05,
       '替代效应'
-    ),
-    makeEffectGuide(
-      'income-guide',
-      showDecomposition ? result.pointB.leisure : null,
-      showDecomposition ? result.pointC.leisure : null,
+    );
+    const incomeGuide = makeEffectGuide(
+      result.pointB.leisure,
+      result.pointC.leisure,
       axis.min + span * 0.11,
       '收入效应'
-    ),
-  ];
+    );
+    if (substitutionGuide) series.push(substitutionGuide);
+    if (incomeGuide) series.push(incomeGuide);
+  }
 
   return {
     series,
@@ -188,7 +158,6 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
       compensatedPoint: roundPoint(result.pointB),
       newPoint: roundPoint(result.pointC),
       effects: roundEffects(result.effects),
-      visibleSeriesCount: stage === 1 ? 3 : stage === 2 ? 6 : 10,
       hasCornerSolution: [result.pointA, result.pointB, result.pointC].some(
         (point) => point.work < 1e-8
       ),
@@ -255,9 +224,8 @@ function calculateAxis(result, stage, autoYAxis, manualYMin, manualYMax) {
   };
 }
 
-function makeLineSeries(id, name, data, color, width, type = 'solid', smooth = false) {
+function makeLineSeries(name, data, color, width, type = 'solid', smooth = false) {
   return {
-    id,
     name,
     type: 'line',
     data,
@@ -270,16 +238,15 @@ function makeLineSeries(id, name, data, color, width, type = 'solid', smooth = f
   };
 }
 
-function makePointSeries(id, label, point) {
+function makePointSeries(label, point) {
   return {
-    id,
     name: '',
     type: 'scatter',
-    data: point ? [[round(point.leisure), round(point.income)]] : [],
+    data: [[round(point.leisure), round(point.income)]],
     symbolSize: 11,
     itemStyle: { color: '#111827' },
     label: {
-      show: Boolean(point),
+      show: true,
       formatter: label,
       position: 'top',
       distance: 8,
@@ -293,21 +260,17 @@ function makePointSeries(id, label, point) {
   };
 }
 
-function makeEffectGuide(id, fromLeisure, toLeisure, y, label) {
-  const hidden = !Number.isFinite(fromLeisure)
-    || !Number.isFinite(toLeisure)
-    || Math.abs(toLeisure - fromLeisure) < 0.05;
+function makeEffectGuide(fromLeisure, toLeisure, y, label) {
+  if (Math.abs(toLeisure - fromLeisure) < 0.05) return null;
+  const arrow = toLeisure < fromLeisure ? '←' : '→';
 
   return {
-    id,
     name: '',
     type: 'line',
-    data: hidden
-      ? []
-      : [
-          [round(fromLeisure), round(y)],
-          [round(toLeisure), round(y)],
-        ],
+    data: [
+      [round(fromLeisure), round(y)],
+      [round(toLeisure), round(y)],
+    ],
     lineStyle: {
       color: '#6b7280',
       width: 1.5,
@@ -315,8 +278,8 @@ function makeEffectGuide(id, fromLeisure, toLeisure, y, label) {
     },
     symbol: 'none',
     endLabel: {
-      show: !hidden,
-      formatter: hidden ? '' : `${toLeisure < fromLeisure ? '←' : '→'} ${label}`,
+      show: true,
+      formatter: `${arrow} ${label}`,
       color: '#4b5563',
       fontSize: 13,
       distance: 6,
