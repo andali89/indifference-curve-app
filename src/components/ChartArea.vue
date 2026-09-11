@@ -30,6 +30,7 @@
         :style="wrapperStyle"
       >
         <v-chart
+          :key="chartInstanceKey"
           class="chart"
           :option="chartOption"
           :update-options="chartUpdateOptions"
@@ -90,11 +91,16 @@ const containerHeight = ref(0);
 let resizeObserver;
 const { isFullscreen, toggle: toggleFullscreen } = useFullscreen(chartAreaRef);
 
-// These teaching charts are small, and some modules intentionally change the
-// number and type of series as the user steps through an explanation. Replacing
-// the ECharts option avoids stale merged series and makes parameter changes
-// immediately visible.
+// Structural chart changes should replace the existing ECharts option.
 const chartUpdateOptions = { notMerge: true };
+
+// The wage-effect teaching module changes chart structure between stages.
+// Remount only for that stage transition so ECharts starts from the complete
+// option for the selected teaching step. Other charts keep the same instance.
+const chartInstanceKey = computed(() => {
+  const stage = Number(props.chartMeta?.stage);
+  return Number.isFinite(stage) ? `teaching-stage-${stage}` : 'default-chart';
+});
 
 const filteredSeries = computed(() =>
   (props.series || []).map((item) => {
