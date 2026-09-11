@@ -122,8 +122,11 @@ const phaseOutDescription = computed(() => {
 
   const earnedIncome = benefit / rate;
   const work = earnedIncome / wage;
-  if (work >= 16) {
-    return `补贴在劳动收入达到 ${earnedIncome.toFixed(0)} 元时退出；按当前工资，16 小时内不会完全退出。`;
+  if (work > 16) {
+    return `补贴在劳动收入达到 ${earnedIncome.toFixed(0)} 元时退出；按当前工资，在 16 小时工作范围内仍未完全退出。`;
+  }
+  if (Math.abs(work - 16) < 1e-9) {
+    return `补贴在劳动收入达到 ${earnedIncome.toFixed(0)} 元时退出，恰好对应工作 16.00 小时、闲暇 0.00 小时。`;
   }
 
   const leisure = 16 - work;
