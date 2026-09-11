@@ -81,9 +81,10 @@ try {
   }
 
   let instanceId;
-  async function checkWages(stage, initialWage = 50, newWage = 100) {
+  async function checkWages(stage, initialWage = 50, newWage = 100, utilityParams = {}) {
     const s = await snapshot();
-    const expected = computeWageEffectsSeries({ stage, initialWage, newWage });
+    const expected = computeWageEffectsSeries({ stage, initialWage, newWage, ...utilityParams });
+    for (const [key, value] of Object.entries(utilityParams)) assert.equal(s.params[key], value);
     assert.equal(s.params.stage, stage);
     assert.equal(s.params.initialWage, initialWage);
     assert.equal(s.params.newWage, newWage);
@@ -178,6 +179,38 @@ try {
   await checkWages(3, 50, 30);
   await page.fill('#new-wage', '50');
   await checkWages(3, 50, 50);
+
+  await page.fill('#new-wage', '100');
+  for (const [utilityType, edits] of [
+    ['cobb-douglas', [['#i-weight', 'iWeight', 1.3], ['#h-weight', 'hWeight', 0.8]]],
+    ['satiating-income', [['#satiation-k', 'satiationK', 720], ['#leisure-gamma', 'leisureGamma', 0.035]]],
+  ]) {
+    await page.selectOption('#utility-type', utilityType);
+    const params = { utilityType };
+    for (const stage of [1, 2, 3]) {
+      await page.locator('.stage-button').nth(stage - 1).click();
+      let previous = await checkWages(stage, 50, 100, params);
+      for (const [selector, key, value] of edits) {
+        params[key] = Number((value + (stage - 1) * (key === 'leisureGamma' ? 0.001 : key === 'satiationK' ? 10 : 0.1)).toFixed(4));
+        await page.fill(selector, String(params[key]));
+        const s = await checkWages(stage, 50, 100, params);
+        assert.notEqual(s.pixels, previous.pixels, `${utilityType} ${key}: canvas unchanged`);
+        previous = s;
+      }
+      await page.fill('#initial-wage', '60');
+      await checkWages(stage, 60, 100, params);
+      await page.fill('#new-wage', '120');
+      await checkWages(stage, 60, 120, params);
+      await page.fill('#initial-wage', '50');
+      await page.fill('#new-wage', '100');
+    }
+    await checkWages(3, 50, 100, params);
+    await page.screenshot({ path: `${artifacts}/wage-${utilityType}.png` });
+  }
+  await page.selectOption('#utility-type', 'cobb-douglas');
+  assert.equal(await page.inputValue('#i-weight'), '1.5');
+  assert.equal(await page.inputValue('#h-weight'), '1');
+  await checkWages(3, 50, 100, { utilityType: 'cobb-douglas', iWeight: 1.5, hWeight: 1 });
 
   for (const [module, edits] of [
     ['indifference', [['#wage-rate', '20'], ['#i-weight', '1.5'], ['#unearned-income', '100']]],

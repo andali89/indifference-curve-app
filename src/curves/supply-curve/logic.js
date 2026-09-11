@@ -1,62 +1,18 @@
-const TOTAL_AVAILABLE_HOURS = 16;
-
-const UTILITY_MODELS = {
-  COBB_DOUGLAS: 'cobb-douglas',
-  SATIATING_INCOME: 'satiating-income',
-};
-
-const UTILITY_MODEL_NAMES = {
-  [UTILITY_MODELS.COBB_DOUGLAS]: 'Cobb–Douglas',
-  [UTILITY_MODELS.SATIATING_INCOME]: '收入边际效用递减型',
-};
-
-function clamp(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
+import {
+  TOTAL_AVAILABLE_HOURS, UTILITY_MODELS, UTILITY_MODEL_NAMES,
+  optimalWorkHoursCobbDouglasRaw, optimalWorkHoursSatiatingRaw, utilityAt,
+} from '../utilityModels.js';
 
 function normalizeNonLaborIncome(value) {
   return Math.max(Number(value) || 0, 0);
 }
 
 export function optimalWorkHoursCobbDouglas(params = {}) {
-  const {
-    wageRate = 50,
-    unearnedIncome = 100,
-    iWeight = 1,
-    hWeight = 1,
-  } = params;
-
-  if (!(wageRate > 0) || !(iWeight > 0) || !(hWeight > 0)) {
-    return 0;
-  }
-
-  const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
-  const totalWeight = iWeight + hWeight;
-  const workHours =
-    (iWeight / totalWeight) * TOTAL_AVAILABLE_HOURS -
-    (hWeight / totalWeight) * (nonLaborIncome / wageRate);
-
-  return round(clamp(workHours, 0, TOTAL_AVAILABLE_HOURS));
+  return round(optimalWorkHoursCobbDouglasRaw(params));
 }
 
 export function optimalWorkHoursSatiating(params = {}) {
-  const {
-    wageRate = 50,
-    unearnedIncome = 100,
-    satiationK = 660,
-    leisureGamma = 0.029,
-  } = params;
-
-  if (!(wageRate > 0) || !(satiationK > 0) || !(leisureGamma > 0)) {
-    return 0;
-  }
-
-  const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
-  const workHours =
-    (satiationK * Math.log(wageRate / (leisureGamma * satiationK)) - nonLaborIncome) /
-    wageRate;
-
-  return round(clamp(workHours, 0, TOTAL_AVAILABLE_HOURS));
+  return round(optimalWorkHoursSatiatingRaw(params));
 }
 
 export function getSatiatingTurningWage(params = {}) {
@@ -78,25 +34,13 @@ export function getSatiatingTurningWage(params = {}) {
 }
 
 function calculateUtility(params, workHours) {
-  const {
-    utilityType = UTILITY_MODELS.COBB_DOUGLAS,
-    wageRate = 50,
-    unearnedIncome = 100,
-    iWeight = 1,
-    hWeight = 1,
-    satiationK = 660,
-    leisureGamma = 0.029,
-  } = params;
+  const { wageRate = 50, unearnedIncome = 100 } = params;
 
   const nonLaborIncome = normalizeNonLaborIncome(unearnedIncome);
   const leisureHours = TOTAL_AVAILABLE_HOURS - workHours;
   const income = nonLaborIncome + wageRate * workHours;
 
-  if (utilityType === UTILITY_MODELS.SATIATING_INCOME) {
-    return 1 - Math.exp(-income / satiationK) + leisureGamma * leisureHours;
-  }
-
-  return Math.pow(income, iWeight) * Math.pow(leisureHours, hWeight);
+  return utilityAt(income, leisureHours, params);
 }
 
 export async function calOptimalWorkT(params = {}) {

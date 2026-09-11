@@ -1,6 +1,41 @@
 <template>
   <div class="wage-effects-controls">
     <section class="control-section">
+      <h3>效用函数</h3>
+      <div class="control-item">
+        <label for="utility-type">效用函数类型</label>
+        <select id="utility-type" :value="modelValue.utilityType" @change="emitPatch({ utilityType: $event.target.value })">
+          <option value="cobb-douglas">Cobb–Douglas</option>
+          <option value="satiating-income">收入边际效用递减型</option>
+        </select>
+      </div>
+      <div v-if="modelValue.utilityType !== 'satiating-income'" class="control-grid">
+        <div class="control-item">
+          <label for="i-weight">收入权重 (α)</label>
+          <input id="i-weight" type="number" min="0.1" step="0.1" :value="modelValue.iWeight" @input="updateNumber('iWeight', $event.target.value)" />
+        </div>
+        <div class="control-item">
+          <label for="h-weight">闲暇权重 (β)</label>
+          <input id="h-weight" type="number" min="0.1" step="0.1" :value="modelValue.hWeight" @input="updateNumber('hWeight', $event.target.value)" />
+        </div>
+      </div>
+      <div v-else class="control-grid">
+        <div class="control-item">
+          <label for="satiation-k">收入边际效用递减速度 (K)</label>
+          <input id="satiation-k" type="number" min="1" step="10" :value="modelValue.satiationK" @input="updateNumber('satiationK', $event.target.value)" />
+        </div>
+        <div class="control-item">
+          <label for="leisure-gamma">闲暇价值 (γ)</label>
+          <input id="leisure-gamma" type="number" min="0.0001" step="0.001" :value="modelValue.leisureGamma" @input="updateNumber('leisureGamma', $event.target.value)" />
+        </div>
+      </div>
+      <div class="assumption-card utility-formula">
+        <span v-if="modelValue.utilityType !== 'satiating-income'">U = I<sup>{{ modelValue.iWeight }}</sup> × H<sup>{{ modelValue.hWeight }}</sup></span>
+        <span v-else>U = 1 − e<sup>−I/{{ modelValue.satiationK }}</sup> + {{ modelValue.leisureGamma }}H</span>
+      </div>
+    </section>
+
+    <section class="control-section">
       <h3>工资变化</h3>
       <div class="control-grid">
         <div class="control-item">
@@ -53,7 +88,6 @@
     </section>
 
     <section class="assumption-card">
-      <div><strong>效用函数：</strong>U = I × H</div>
       <div><strong>可支配时间：</strong>16 小时</div>
       <div><strong>非劳动收入：</strong>100 元</div>
     </section>
@@ -62,11 +96,13 @@
 
 <script setup>
 import { computed } from 'vue';
+import { UTILITY_DEFAULTS } from '../utilityModels.js';
 
 const props = defineProps({
   modelValue: {
     type: Object,
     default: () => ({
+      ...UTILITY_DEFAULTS,
       initialWage: 50,
       newWage: 100,
       stage: 1,
@@ -104,7 +140,8 @@ function updateStage(stage) {
 
 function updateNumber(key, value) {
   const number = Number(value);
-  emitPatch({ [key]: number > 0 ? number : 1 });
+  const fallback = { ...UTILITY_DEFAULTS, initialWage: 1, newWage: 1 }[key];
+  emitPatch({ [key]: Number.isFinite(number) && number > 0 ? number : fallback });
 }
 </script>
 
@@ -154,13 +191,24 @@ label {
   gap: 8px;
 }
 
-.input-with-unit input {
-  flex: 1;
+input[type='number'], select {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d2d2d7;
   font-size: 14px;
+  background: #fff;
+}
+
+.input-with-unit input {
+  flex: 1;
+}
+
+.utility-formula {
+  text-align: center;
+  font-weight: 600;
 }
 
 .unit {

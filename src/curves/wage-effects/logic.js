@@ -1,4 +1,7 @@
-const TOTAL_AVAILABLE_HOURS = 16;
+import {
+  TOTAL_AVAILABLE_HOURS, UTILITY_DEFAULTS, UTILITY_MODELS, UTILITY_MODEL_NAMES,
+  optimalWorkHoursRaw, utilityAt, incomeAtUtility, compensatedChoice,
+} from '../utilityModels.js';
 const NON_LABOR_INCOME = 100;
 const DEFAULT_INITIAL_WAGE = 50;
 const DEFAULT_NEW_WAGE = 100;
@@ -17,21 +20,30 @@ function normalizeStage(value) {
   return clamp(Math.round(Number(value) || 1), 1, 3);
 }
 
-function calculateOptimumRaw(wageRate) {
+function normalizeUtilityParams(params) {
+  const normalized = { ...UTILITY_DEFAULTS };
+  if (params.utilityType === UTILITY_MODELS.SATIATING_INCOME) normalized.utilityType = params.utilityType;
+  for (const key of ['iWeight', 'hWeight', 'satiationK', 'leisureGamma']) {
+    if (Number.isFinite(Number(params[key])) && Number(params[key]) > 0) normalized[key] = Number(params[key]);
+  }
+  return normalized;
+}
+
+function calculateOptimumRaw(wageRate, params) {
   const wage = normalizeWage(wageRate, MIN_WAGE);
   const fullIncome = NON_LABOR_INCOME + wage * TOTAL_AVAILABLE_HOURS;
-  const leisure = clamp(fullIncome / (2 * wage), 0, TOTAL_AVAILABLE_HOURS);
+  const leisure = TOTAL_AVAILABLE_HOURS - optimalWorkHoursRaw({ ...params, wageRate: wage, unearnedIncome: NON_LABOR_INCOME });
   const income = fullIncome - wage * leisure;
 
   return {
     leisure,
     work: TOTAL_AVAILABLE_HOURS - leisure,
     income,
-    utility: income * leisure,
+    utility: utilityAt(income, leisure, params),
   };
 }
 
-function calculateHicksPointRaw(referenceUtility, wageRate) {
+function calculateHicksPointRaw(referenceUtility, wageRate, params) {
   const wage = normalizeWage(wageRate, MIN_WAGE);
   if (!(referenceUtility > 0)) {
     return {
@@ -42,9 +54,7 @@ function calculateHicksPointRaw(referenceUtility, wageRate) {
     };
   }
 
-  const interiorLeisure = Math.sqrt(referenceUtility / wage);
-  const leisure = clamp(interiorLeisure, 0, TOTAL_AVAILABLE_HOURS);
-  const income = referenceUtility / leisure;
+  const { leisure, income } = compensatedChoice(referenceUtility, wage, params);
 
   return {
     leisure,
@@ -57,14 +67,16 @@ function calculateHicksPointRaw(referenceUtility, wageRate) {
 function calculateDecompositionRaw(params = {}) {
   const initialWage = normalizeWage(params.initialWage, DEFAULT_INITIAL_WAGE);
   const newWage = normalizeWage(params.newWage, DEFAULT_NEW_WAGE);
-  const pointA = calculateOptimumRaw(initialWage);
-  const pointC = calculateOptimumRaw(newWage);
+  const utilityParams = normalizeUtilityParams(params);
+  const pointA = calculateOptimumRaw(initialWage, utilityParams);
+  const pointC = calculateOptimumRaw(newWage, utilityParams);
   // Evaluate the old wage at the final utility: A→B is income, B→C substitution.
-  const pointB = calculateHicksPointRaw(pointC.utility, initialWage);
+  const pointB = calculateHicksPointRaw(pointC.utility, initialWage, utilityParams);
 
   return {
     initialWage,
     newWage,
+    utilityParams,
     pointA,
     pointB,
     pointC,
@@ -76,12 +88,12 @@ function calculateDecompositionRaw(params = {}) {
   };
 }
 
-export function calculateOptimum(wageRate) {
-  return roundPoint(calculateOptimumRaw(wageRate));
+export function calculateOptimum(wageRate, params = {}) {
+  return roundPoint(calculateOptimumRaw(wageRate, normalizeUtilityParams(params)));
 }
 
-export function calculateHicksCompensatedPoint(referenceUtility, wageRate) {
-  return roundPoint(calculateHicksPointRaw(referenceUtility, wageRate));
+export function calculateHicksCompensatedPoint(referenceUtility, wageRate, params = {}) {
+  return roundPoint(calculateHicksPointRaw(referenceUtility, wageRate, normalizeUtilityParams(params)));
 }
 
 export function calculateDecomposition(params = {}) {
@@ -110,14 +122,14 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
 
   series.push(
     makeLineSeries('初始预算线', generateBudgetLine(result.initialWage), '#0066cc', 3),
-    makeLineSeries('初始无差异曲线 U₀', generateIndifferenceCurve(result.pointA.utility, axis.max), '#dc2626', 2.5, 'solid', true),
+    makeLineSeries('初始无差异曲线 U₀', generateIndifferenceCurve(result.pointA.utility, axis.max, result.utilityParams, [result.pointA]), '#dc2626', 2.5, 'solid', true),
     makePointSeries('A', result.pointA)
   );
 
   if (stage >= 2) {
     series.push(
       makeLineSeries('新预算线', generateBudgetLine(result.newWage), '#0f766e', 3),
-      makeLineSeries('新无差异曲线 U₁', generateIndifferenceCurve(result.pointC.utility, axis.max), '#ea580c', 2.5, 'solid', true),
+      makeLineSeries('新无差异曲线 U₁', generateIndifferenceCurve(result.pointC.utility, axis.max, result.utilityParams, [result.pointB, result.pointC]), '#ea580c', 2.5, 'solid', true),
       makePointSeries('C', result.pointC)
     );
   }
@@ -160,6 +172,8 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
       stage,
       compensationType: 'Hicksian',
       referenceUtility: 'final',
+      utilityType: result.utilityParams.utilityType,
+      utilityModelName: UTILITY_MODEL_NAMES[result.utilityParams.utilityType],
       totalHours: TOTAL_AVAILABLE_HOURS,
       nonLaborIncome: NON_LABOR_INCOME,
       initialWage: round(result.initialWage),
@@ -169,7 +183,7 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
       newPoint: roundPoint(result.pointC),
       effects: roundEffects(result.effects),
       hasCornerSolution: [result.pointA, result.pointB, result.pointC].some(
-        (point) => point.work < 1e-8
+        (point) => point.work < 1e-8 || point.leisure < 1e-8 || point.income < 1e-8
       ),
     },
   };
@@ -199,12 +213,14 @@ function generateCompensatedBudgetLine(pointB, wageRate) {
   ];
 }
 
-function generateIndifferenceCurve(utility, yAxisMax, step = 0.05) {
+function generateIndifferenceCurve(utility, yAxisMax, params, points, step = 0.05) {
   if (!(utility > 0)) return [];
 
   const data = [];
-  for (let leisure = step; leisure <= TOTAL_AVAILABLE_HOURS; leisure += step) {
-    const income = utility / leisure;
+  const leisureValues = new Set(points.map(point => point.leisure));
+  for (let index = 0; index <= TOTAL_AVAILABLE_HOURS / step; index++) leisureValues.add(index * step);
+  for (const leisure of [...leisureValues].sort((a, b) => a - b)) {
+    const income = incomeAtUtility(utility, leisure, params);
     if (!Number.isFinite(income) || income < 0) continue;
     if (Number.isFinite(yAxisMax) && income > yAxisMax * 1.05) continue;
     data.push([round(leisure), round(income)]);
@@ -332,5 +348,6 @@ function roundEffects(effects) {
 }
 
 function round(value) {
-  return Number.parseFloat(Number(value).toFixed(2));
+  const rounded = Number.parseFloat(Number(value).toFixed(2));
+  return Object.is(rounded, -0) ? 0 : rounded;
 }

@@ -1,6 +1,7 @@
 <template>
   <div class="wage-effects-info">
     <div class="info-chips">
+      <span class="info-chip">{{ chartMeta.utilityModelName }}</span>
       <template v-if="stage === 1">
         <span class="info-chip">A 初始劳动 = {{ formatHours(initialPoint.work) }}</span>
       </template>
@@ -17,7 +18,7 @@
         <span class="info-chip emphasis-chip">总效应 = {{ formatSignedHours(effects.totalWork) }}</span>
       </template>
 
-      <span v-if="hasCornerSolution" class="info-chip warning-chip">当前参数包含不工作角点</span>
+      <span v-if="hasCornerSolution" class="info-chip warning-chip">当前参数包含边界最优点</span>
     </div>
 
     <p class="teaching-note">{{ teachingNote }}</p>

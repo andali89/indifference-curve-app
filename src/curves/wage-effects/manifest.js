@@ -1,6 +1,7 @@
 import Controls from './Controls.vue';
 import ChartInfo from './ChartInfo.vue';
 import { computeWageEffectsSeries } from './logic.js';
+import { UTILITY_DEFAULTS } from '../utilityModels.js';
 
 export default {
   id: 'wage-effects',
@@ -8,6 +9,7 @@ export default {
   ControlsComponent: Controls,
   ChartInfoComponent: ChartInfo,
   defaultParams: {
+    ...UTILITY_DEFAULTS,
     initialWage: 50,
     newWage: 100,
     stage: 1,
