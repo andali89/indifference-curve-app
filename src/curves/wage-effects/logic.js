@@ -31,9 +31,9 @@ function calculateOptimumRaw(wageRate) {
   };
 }
 
-function calculateHicksPointRaw(initialUtility, newWageRate) {
-  const wage = normalizeWage(newWageRate, MIN_WAGE);
-  if (!(initialUtility > 0)) {
+function calculateHicksPointRaw(referenceUtility, wageRate) {
+  const wage = normalizeWage(wageRate, MIN_WAGE);
+  if (!(referenceUtility > 0)) {
     return {
       leisure: 0,
       work: TOTAL_AVAILABLE_HOURS,
@@ -42,15 +42,15 @@ function calculateHicksPointRaw(initialUtility, newWageRate) {
     };
   }
 
-  const interiorLeisure = Math.sqrt(initialUtility / wage);
+  const interiorLeisure = Math.sqrt(referenceUtility / wage);
   const leisure = clamp(interiorLeisure, 0, TOTAL_AVAILABLE_HOURS);
-  const income = initialUtility / leisure;
+  const income = referenceUtility / leisure;
 
   return {
     leisure,
     work: TOTAL_AVAILABLE_HOURS - leisure,
     income,
-    utility: initialUtility,
+    utility: referenceUtility,
   };
 }
 
@@ -59,7 +59,8 @@ function calculateDecompositionRaw(params = {}) {
   const newWage = normalizeWage(params.newWage, DEFAULT_NEW_WAGE);
   const pointA = calculateOptimumRaw(initialWage);
   const pointC = calculateOptimumRaw(newWage);
-  const pointB = calculateHicksPointRaw(pointA.utility, newWage);
+  // Evaluate the old wage at the final utility: A→B is income, B→C substitution.
+  const pointB = calculateHicksPointRaw(pointC.utility, initialWage);
 
   return {
     initialWage,
@@ -68,8 +69,8 @@ function calculateDecompositionRaw(params = {}) {
     pointB,
     pointC,
     effects: {
-      substitutionWork: pointB.work - pointA.work,
-      incomeWork: pointC.work - pointB.work,
+      substitutionWork: pointC.work - pointB.work,
+      incomeWork: pointB.work - pointA.work,
       totalWork: pointC.work - pointA.work,
     },
   };
@@ -79,8 +80,8 @@ export function calculateOptimum(wageRate) {
   return roundPoint(calculateOptimumRaw(wageRate));
 }
 
-export function calculateHicksCompensatedPoint(initialUtility, newWageRate) {
-  return roundPoint(calculateHicksPointRaw(initialUtility, newWageRate));
+export function calculateHicksCompensatedPoint(referenceUtility, wageRate) {
+  return roundPoint(calculateHicksPointRaw(referenceUtility, wageRate));
 }
 
 export function calculateDecomposition(params = {}) {
@@ -123,22 +124,30 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
 
   if (stage >= 3) {
     series.push(
-      makeLineSeries('Hicks 补偿线', generateCompensatedBudgetLine(result.pointB, result.newWage), '#0f766e', 2.5, 'dashed'),
-      makePointSeries('B', result.pointB)
+      makeLineSeries('Hicks 补偿线', generateCompensatedBudgetLine(result.pointB, result.initialWage), '#7c3aed', 2.5, 'dashed'),
+      makePointSeries('B', result.pointB),
+      ...[result.pointA, result.pointB, result.pointC].map((point) => ({
+        ...makeLineSeries('', [[round(point.leisure), round(point.income)], [round(point.leisure), 0]], '#94a3b8', 1.5, 'dashed'),
+        silent: true,
+        tooltip: { show: false },
+        z: 1,
+      }))
     );
 
     const span = axis.max - axis.min;
     const substitutionGuide = makeEffectGuide(
-      result.pointA.leisure,
-      result.pointB.leisure,
-      axis.min + span * 0.05,
-      '替代效应'
-    );
-    const incomeGuide = makeEffectGuide(
       result.pointB.leisure,
       result.pointC.leisure,
-      axis.min + span * 0.11,
-      '收入效应'
+      axis.min + span * 0.05,
+      '替代效应 B→C',
+      '#2563eb'
+    );
+    const incomeGuide = makeEffectGuide(
+      result.pointA.leisure,
+      result.pointB.leisure,
+      axis.min + span * 0.13,
+      '收入效应 A→B',
+      '#a16207'
     );
     if (substitutionGuide) series.push(substitutionGuide);
     if (incomeGuide) series.push(incomeGuide);
@@ -150,6 +159,7 @@ export function computeWageEffectsSeries(params = {}, sharedOptions = {}) {
     meta: {
       stage,
       compensationType: 'Hicksian',
+      referenceUtility: 'final',
       totalHours: TOTAL_AVAILABLE_HOURS,
       nonLaborIncome: NON_LABOR_INCOME,
       initialWage: round(result.initialWage),
@@ -172,9 +182,9 @@ function generateBudgetLine(wageRate) {
   ];
 }
 
-function generateCompensatedBudgetLine(pointB, newWageRate) {
-  const fullIncome = pointB.income + newWageRate * pointB.leisure;
-  const incomeAtFullLeisure = fullIncome - newWageRate * TOTAL_AVAILABLE_HOURS;
+function generateCompensatedBudgetLine(pointB, wageRate) {
+  const fullIncome = pointB.income + wageRate * pointB.leisure;
+  const incomeAtFullLeisure = fullIncome - wageRate * TOTAL_AVAILABLE_HOURS;
 
   if (incomeAtFullLeisure >= 0) {
     return [
@@ -185,7 +195,7 @@ function generateCompensatedBudgetLine(pointB, newWageRate) {
 
   return [
     [0, round(fullIncome)],
-    [round(fullIncome / newWageRate), 0],
+    [round(fullIncome / wageRate), 0],
   ];
 }
 
@@ -214,7 +224,7 @@ function calculateAxis(result, stage, autoYAxis, manualYMin, manualYMax) {
     visibleMax.push(NON_LABOR_INCOME + result.newWage * TOTAL_AVAILABLE_HOURS);
   }
   if (stage >= 3) {
-    visibleMax.push(result.pointB.income + result.newWage * result.pointB.leisure);
+    visibleMax.push(result.pointB.income + result.initialWage * result.pointB.leisure);
   }
 
   const max = Math.max(...visibleMax, 100);
@@ -260,33 +270,46 @@ function makePointSeries(label, point) {
   };
 }
 
-function makeEffectGuide(fromLeisure, toLeisure, y, label) {
+function makeEffectGuide(fromLeisure, toLeisure, y, label, color) {
   if (Math.abs(toLeisure - fromLeisure) < 0.05) return null;
-  const arrow = toLeisure < fromLeisure ? '←' : '→';
 
   return {
     name: '',
     type: 'line',
     data: [
       [round(fromLeisure), round(y)],
-      [round(toLeisure), round(y)],
+      {
+        value: [round((fromLeisure + toLeisure) / 2), round(y)],
+        label: {
+          show: true,
+          formatter: label,
+          position: 'top',
+          distance: 8,
+          color,
+          fontSize: 14,
+          fontWeight: 600,
+          backgroundColor: '#fff',
+          padding: [3, 6],
+        },
+      },
+      {
+        value: [round(toLeisure), round(y)],
+        symbol: 'triangle',
+        symbolSize: 12,
+        symbolRotate: toLeisure < fromLeisure ? 90 : -90,
+        itemStyle: { color, opacity: 1 },
+      },
     ],
     lineStyle: {
-      color: '#6b7280',
-      width: 1.5,
-      type: 'dashed',
+      color,
+      width: 2.5,
     },
-    symbol: 'none',
-    endLabel: {
-      show: true,
-      formatter: `${arrow} ${label}`,
-      color: '#4b5563',
-      fontSize: 13,
-      distance: 6,
-    },
+    symbol: 'circle',
+    symbolSize: 1,
+    itemStyle: { color: 'transparent' },
     tooltip: { show: false },
     silent: true,
-    z: 1,
+    z: 5,
     meta: { holdEligible: false },
   };
 }

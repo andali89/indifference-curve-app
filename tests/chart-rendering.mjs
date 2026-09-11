@@ -69,6 +69,11 @@ try {
         received: chart.props.option, rendered: instance.getOption().series,
         instanceId: instance.id, views, displayCount: display.length,
         texts: display.filter(element => element.type === 'tspan').map(element => element.style.text),
+        effectLabels: display.filter(element => element.type === 'tspan' && /^(收入效应 A|替代效应 B)/.test(element.style.text)).map(element => {
+          const rect = element.getBoundingRect().clone();
+          if (element.transform) rect.applyTransform(element.transform);
+          return { text: element.style.text, x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+        }),
         info: document.querySelector('.chart-header').textContent,
         pixels: document.querySelector('.chart canvas').toDataURL(),
       }));
@@ -101,16 +106,26 @@ try {
     assert.equal(s.rendered.length, expected.series.length);
     s.rendered.forEach((series, index) => {
       assert.equal(series.type, expected.series[index].type);
-      assert.deepEqual(series.data, expected.series[index].data);
+      assert.deepEqual(series.data.map(point => point.value ?? point), expected.series[index].data.map(point => point.value ?? point));
       assert.ok(s.views[index].elements > 0, `stage ${stage}: empty series view ${index}`);
-      for (const point of series.data) assert.ok(point.every(Number.isFinite));
+      for (const point of series.data) assert.ok((point.value ?? point).every(Number.isFinite));
     });
     for (const label of stage === 1 ? ['A'] : stage === 2 ? ['A', 'C'] : ['A', 'B', 'C']) {
       assert.ok(s.texts.includes(label), `stage ${stage}: missing rendered ${label}`);
     }
     if (stage === 3) {
-      assert.ok(s.texts.some(text => text.includes('替代效应')));
-      assert.ok(s.texts.some(text => text.includes('收入效应')));
+      const compensation = s.rendered.find(series => series.name === 'Hicks 补偿线');
+      const [start, end] = compensation.data;
+      assert.ok(Math.abs((end[1] - start[1]) / (end[0] - start[0]) + initialWage) < 0.1);
+      assert.equal(s.meta.compensatedPoint.utility, s.meta.newPoint.utility);
+      const projections = s.rendered.filter(series => series.type === 'line' && series.data.length === 2 && series.data[0][0] === series.data[1][0]);
+      assert.equal(projections.length, 3);
+      for (const projection of projections) assert.equal(projection.data[1][1], 0);
+      if (initialWage !== newWage) {
+        assert.equal(s.effectLabels.length, 2);
+        const [a, b] = s.effectLabels;
+        assert.ok(a.y + a.height < b.y || b.y + b.height < a.y, 'effect labels must occupy separate rows');
+      }
     }
     assert.ok(s.displayCount > 0);
     instanceId ??= s.instanceId;
@@ -130,10 +145,10 @@ try {
   assert.ok(stagePixels.size >= 3, 'stages must change the canvas');
   const defaults = traces.at(-1).meta;
   assert.deepEqual(defaults.initialPoint, { leisure: 9, work: 7, income: 450, utility: 4050 });
-  assert.deepEqual(defaults.compensatedPoint, { leisure: 6.36, work: 9.64, income: 636.4, utility: 4050 });
+  assert.deepEqual(defaults.compensatedPoint, { leisure: 12.02, work: 3.98, income: 601.04, utility: 7225 });
   assert.deepEqual(defaults.newPoint, { leisure: 8.5, work: 7.5, income: 850, utility: 7225 });
-  assert.deepEqual(defaults.effects, { substitutionWork: 2.64, incomeWork: -2.14, totalWork: 0.5 });
-  for (const value of ['+2.64', '-2.14', '+0.50']) assert.ok(traces.at(-1).info.includes(value));
+  assert.deepEqual(defaults.effects, { substitutionWork: 3.52, incomeWork: -3.02, totalWork: 0.5 });
+  for (const value of ['+3.52', '-3.02', '+0.50']) assert.ok(traces.at(-1).info.includes(value));
 
   for (const stage of [1, 2, 3]) {
     await page.locator('.stage-button').nth(stage - 1).click();
@@ -154,6 +169,15 @@ try {
     }
   });
   await checkWages(3);
+
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await checkWages(3);
+  await page.screenshot({ path: `${artifacts}/stage-3-compact.png` });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.fill('#new-wage', '30');
+  await checkWages(3, 50, 30);
+  await page.fill('#new-wage', '50');
+  await checkWages(3, 50, 50);
 
   for (const [module, edits] of [
     ['indifference', [['#wage-rate', '20'], ['#i-weight', '1.5'], ['#unearned-income', '100']]],

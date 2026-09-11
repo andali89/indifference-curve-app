@@ -79,7 +79,7 @@ const emit = defineEmits(['update:modelValue']);
 const stages = [
   { value: 1, label: '1 初始状态', description: '先观察初始预算线、无差异曲线与最优点 A。' },
   { value: 2, label: '2 工资变化', description: '加入新预算线与新最优点 C，观察工资变化后的总效应。' },
-  { value: 3, label: '3 效应分解', description: '加入 Hicks 补偿线与点 B，将总效应分解为替代效应和收入效应。' },
+  { value: 3, label: '3 效应分解', description: '补偿线平行于旧预算线、达到新效用。沿横轴投影观察：A→B 收入效应，B→C 替代效应。' },
 ];
 
 const currentStage = computed(() => {

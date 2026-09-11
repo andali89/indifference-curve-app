@@ -55,7 +55,7 @@ const teachingNote = computed(() => {
   if (stage.value === 2) {
     return 'A→C 是工资变化后的总效应。';
   }
-  return '按劳动时间计：A→B 为替代效应，B→C 为收入效应。横轴表示闲暇，因此图上的左右方向与劳动时间变化方向相反。';
+  return '补偿线平行于旧预算线，在 B 点达到新效用 U₁。A→B 为收入效应，B→C 为替代效应；数值按劳动时间计，方向与横轴闲暇相反。';
 });
 
 function formatHours(value) {
