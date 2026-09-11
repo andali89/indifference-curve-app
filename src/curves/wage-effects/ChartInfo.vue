@@ -32,6 +32,14 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
+  viewMode: {
+    type: String,
+    default: 'normal',
+  },
+  params: {
+    type: Object,
+    default: () => ({}),
+  },
 });
 
 const stage = computed(() => Number(props.chartMeta.stage) || 1);
