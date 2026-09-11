@@ -1,8 +1,9 @@
 import { computed } from 'vue';
 import indifferenceCurve from '../curves/indifference/manifest.js';
+import wageEffectsCurve from '../curves/wage-effects/manifest.js';
 import supplyCurve from '../curves/supply-curve/manifest.js';
 
-const registry = [indifferenceCurve, supplyCurve];
+const registry = [indifferenceCurve, wageEffectsCurve, supplyCurve];
 
 export function useCurveRegistry() {
   const curves = computed(() => registry);
