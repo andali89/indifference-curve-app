@@ -8,7 +8,7 @@ import {
   utilityAt,
 } from '../utilityModels.js';
 
-const NON_LABOR_INCOME = 100;
+const DEFAULT_NON_LABOR_INCOME = 100;
 const DEFAULT_WAGE = 50;
 const DEFAULT_MAX_BENEFIT = 200;
 const DEFAULT_REDUCTION_RATE = 0.5;
@@ -33,6 +33,7 @@ function normalizeUtilityParams(params = {}) {
 
 function normalizeParams(params = {}) {
   const wageRate = Number(params.wageRate);
+  const nonLaborIncome = Number(params.nonLaborIncome);
   const maxBenefit = Number(params.maxBenefit);
   const reductionRate = Number(params.reductionRate);
 
@@ -41,6 +42,9 @@ function normalizeParams(params = {}) {
       ? WELFARE_POLICY_TYPES.PHASEOUT
       : WELFARE_POLICY_TYPES.NAIL,
     wageRate: wageRate > 0 ? wageRate : DEFAULT_WAGE,
+    nonLaborIncome: Number.isFinite(nonLaborIncome) && nonLaborIncome >= 0
+      ? nonLaborIncome
+      : DEFAULT_NON_LABOR_INCOME,
     maxBenefit: Number.isFinite(maxBenefit) && maxBenefit >= 0 ? maxBenefit : DEFAULT_MAX_BENEFIT,
     reductionRate: Number.isFinite(reductionRate)
       ? clamp(reductionRate, 0, 1)
@@ -70,7 +74,7 @@ function consumptionAtWork(workHours, normalized) {
     leisure: TOTAL_AVAILABLE_HOURS - work,
     earnedIncome,
     benefit,
-    income: NON_LABOR_INCOME + earnedIncome + benefit,
+    income: normalized.nonLaborIncome + earnedIncome + benefit,
   };
 }
 
@@ -85,14 +89,14 @@ function calculateBaselinePoint(normalized) {
   const work = optimalWorkHoursRaw({
     ...normalized.utilityParams,
     wageRate: normalized.wageRate,
-    unearnedIncome: NON_LABOR_INCOME,
+    unearnedIncome: normalized.nonLaborIncome,
   });
   return pointWithUtility({
     work,
     leisure: TOTAL_AVAILABLE_HOURS - work,
     earnedIncome: normalized.wageRate * work,
     benefit: 0,
-    income: NON_LABOR_INCOME + normalized.wageRate * work,
+    income: normalized.nonLaborIncome + normalized.wageRate * work,
   }, normalized.utilityParams);
 }
 
@@ -100,7 +104,7 @@ function calculatePhaseoutPolicyPoint(normalized) {
   if (normalized.maxBenefit === 0) return calculateBaselinePoint(normalized);
 
   const candidates = new Set([0, TOTAL_AVAILABLE_HOURS]);
-  const { wageRate, maxBenefit, reductionRate, utilityParams } = normalized;
+  const { wageRate, nonLaborIncome, maxBenefit, reductionRate, utilityParams } = normalized;
   const phaseOutWork = reductionRate > 0 ? maxBenefit / (reductionRate * wageRate) : Infinity;
   const benefitSegmentMax = clamp(phaseOutWork, 0, TOTAL_AVAILABLE_HOURS);
 
@@ -113,7 +117,7 @@ function calculatePhaseoutPolicyPoint(normalized) {
     const benefitSegmentOptimum = optimalWorkHoursRaw({
       ...utilityParams,
       wageRate: netWage,
-      unearnedIncome: NON_LABOR_INCOME + maxBenefit,
+      unearnedIncome: nonLaborIncome + maxBenefit,
     });
     candidates.add(clamp(benefitSegmentOptimum, 0, benefitSegmentMax));
   }
@@ -122,14 +126,14 @@ function calculatePhaseoutPolicyPoint(normalized) {
     const unrestricted = optimalWorkHoursRaw({
       ...utilityParams,
       wageRate,
-      unearnedIncome: NON_LABOR_INCOME + maxBenefit,
+      unearnedIncome: nonLaborIncome + maxBenefit,
     });
     candidates.add(unrestricted);
   } else if (phaseOutWork < TOTAL_AVAILABLE_HOURS) {
     const baselineOptimum = optimalWorkHoursRaw({
       ...utilityParams,
       wageRate,
-      unearnedIncome: NON_LABOR_INCOME,
+      unearnedIncome: nonLaborIncome,
     });
     candidates.add(clamp(baselineOptimum, Math.max(phaseOutWork, 0), TOTAL_AVAILABLE_HOURS));
   }
@@ -237,12 +241,12 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
         series.push(
           makeLineSeries(
             '补贴断崖 G（示意）',
-            [[TOTAL_AVAILABLE_HOURS, NON_LABOR_INCOME], [TOTAL_AVAILABLE_HOURS, round(result.nonworkPoint.income)]],
+            [[TOTAL_AVAILABLE_HOURS, round(result.nonLaborIncome)], [TOTAL_AVAILABLE_HOURS, round(result.nonworkPoint.income)]],
             '#d97706',
             2,
             'dashed'
           ),
-          makeOpenPointSeries([TOTAL_AVAILABLE_HOURS, NON_LABOR_INCOME], '#0f766e'),
+          makeOpenPointSeries([TOTAL_AVAILABLE_HOURS, result.nonLaborIncome], '#0f766e'),
           makePointSeries('C', result.nonworkPoint, result.stage >= 3 ? '#7c3aed' : '#d97706', 12)
         );
       }
@@ -292,7 +296,7 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
       utilityType: result.utilityParams.utilityType,
       utilityModelName: UTILITY_MODEL_NAMES[result.utilityParams.utilityType],
       totalHours: TOTAL_AVAILABLE_HOURS,
-      nonLaborIncome: NON_LABOR_INCOME,
+      nonLaborIncome: round(result.nonLaborIncome),
       wageRate: round(result.wageRate),
       maxBenefit: round(result.maxBenefit),
       reductionRate: round(result.reductionRate),
@@ -319,8 +323,8 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
 
 function generateBaselineBudgetLine(result) {
   return [
-    [0, round(NON_LABOR_INCOME + result.wageRate * TOTAL_AVAILABLE_HOURS)],
-    [TOTAL_AVAILABLE_HOURS, NON_LABOR_INCOME],
+    [0, round(result.nonLaborIncome + result.wageRate * TOTAL_AVAILABLE_HOURS)],
+    [TOTAL_AVAILABLE_HOURS, round(result.nonLaborIncome)],
   ];
 }
 
@@ -362,7 +366,7 @@ function calculateAxis(result, autoYAxis, manualYMin, manualYMax) {
 
   const policyAtMaxWork = consumptionAtWork(TOTAL_AVAILABLE_HOURS, result).income;
   const policyAtNoWork = consumptionAtWork(0, result).income;
-  const baselineAtMaxWork = NON_LABOR_INCOME + result.wageRate * TOTAL_AVAILABLE_HOURS;
+  const baselineAtMaxWork = result.nonLaborIncome + result.wageRate * TOTAL_AVAILABLE_HOURS;
   const max = Math.max(
     policyAtMaxWork,
     policyAtNoWork,
