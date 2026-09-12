@@ -4,7 +4,7 @@ import {
   UTILITY_DEFAULTS, optimalWorkHoursRaw, utilityAt, incomeAtUtility, compensatedChoice,
 } from '../src/curves/utilityModels.js';
 import { calculateOptimum, computeWageEffectsSeries } from '../src/curves/wage-effects/logic.js';
-import { calculateWelfareAnalysis, computeWelfareTransferSeries } from '../src/curves/welfare-transfer/logic.js';
+import { calculateTransfer, calculateWelfareAnalysis, computeWelfareTransferSeries } from '../src/curves/welfare-transfer/logic.js';
 import { calOptimalWorkT } from '../src/curves/supply-curve/logic.js';
 
 function close(actual, expected, tolerance = 1e-8) {
@@ -73,8 +73,53 @@ test('known default results and satiating income-utility domain', () => {
   assert.equal(incomeAtUtility(0.1, 16, satiating), null);
 });
 
-test('welfare transfer default kink coordinates are correct', () => {
-  const result = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200, reductionRate: 0.5 });
+test('nail welfare is the default and creates a discontinuous participation choice', () => {
+  const result = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200 });
+  assert.equal(result.policyType, 'nail');
+  assert.equal(result.hasVisibleKink, false);
+  assert.equal(result.hasBenefitCliff, true);
+  assert.equal(result.participationChoice, 'nonwork');
+  assert.deepEqual(
+    [result.nonworkPoint.work, result.nonworkPoint.leisure, result.nonworkPoint.income, result.nonworkPoint.benefit, result.nonworkPoint.utility],
+    [0, 16, 300, 200, 4800]
+  );
+  close(result.workingPoint.work, 7);
+  close(result.workingPoint.utility, 4050);
+  close(result.policyPoint.work, 0);
+  close(result.workChange, -7);
+  assert.equal(calculateTransfer(0, { maxBenefit: 200 }), 200);
+  assert.equal(calculateTransfer(1, { maxBenefit: 200 }), 0);
+});
+
+test('nail welfare participation responds to benefit and wage levels', () => {
+  assert.equal(calculateWelfareAnalysis({ policyType: 'nail', wageRate: 50, maxBenefit: 100 }).participationChoice, 'work');
+  assert.equal(calculateWelfareAnalysis({ policyType: 'nail', wageRate: 50, maxBenefit: 200 }).participationChoice, 'nonwork');
+  assert.equal(calculateWelfareAnalysis({ policyType: 'nail', wageRate: 100, maxBenefit: 200 }).participationChoice, 'work');
+
+  const zeroBenefit = calculateWelfareAnalysis({ policyType: 'nail', wageRate: 50, maxBenefit: 0 });
+  close(zeroBenefit.policyPoint.work, zeroBenefit.baselinePoint.work);
+  close(zeroBenefit.policyPoint.income, zeroBenefit.baselinePoint.income);
+});
+
+test('nail chart renders the cliff as a dashed guide rather than a feasible solid segment', () => {
+  const chart = computeWelfareTransferSeries({ policyType: 'nail', wageRate: 50, maxBenefit: 200, stage: 3 });
+  const cliff = chart.series.find((series) => series.name === '补贴断崖 G（示意）');
+  assert.ok(cliff);
+  assert.equal(cliff.lineStyle.type, 'dashed');
+  assert.deepEqual(cliff.data, [[16, 100], [16, 300]]);
+  assert.equal(chart.meta.participationChoice, 'nonwork');
+  assert.deepEqual(chart.meta.nonworkPoint, {
+    leisure: 16,
+    work: 0,
+    earnedIncome: 0,
+    benefit: 200,
+    income: 300,
+    utility: 4800,
+  });
+});
+
+test('gradual welfare default kink coordinates are preserved when phaseout is selected', () => {
+  const result = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate: 50, maxBenefit: 200, reductionRate: 0.5 });
   close(result.phaseOutEarnedIncome, 400);
   close(result.phaseOutWork, 8);
   assert.equal(result.hasVisibleKink, true);
@@ -84,33 +129,33 @@ test('welfare transfer default kink coordinates are correct', () => {
   close(result.kinkPoint.benefit, 0);
 });
 
-test('zero transfer reproduces the baseline budget and optimum', () => {
-  const result = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 0, reductionRate: 0.5 });
+test('zero transfer reproduces the baseline budget and optimum in gradual phaseout mode', () => {
+  const result = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate: 50, maxBenefit: 0, reductionRate: 0.5 });
   close(result.policyPoint.work, result.baselinePoint.work);
   close(result.policyPoint.leisure, result.baselinePoint.leisure);
   close(result.policyPoint.income, result.baselinePoint.income);
 
-  const chart = computeWelfareTransferSeries({ wageRate: 50, maxBenefit: 0, reductionRate: 0.5, stage: 2 });
+  const chart = computeWelfareTransferSeries({ policyType: 'phaseout', wageRate: 50, maxBenefit: 0, reductionRate: 0.5, stage: 2 });
   const baseline = chart.series.find((series) => series.name === '无补贴预算线');
   const policy = chart.series.find((series) => series.name === '福利计划预算约束');
   assert.deepEqual(policy.data, baseline.data);
 });
 
-test('benefit reduction rate moves the phase-out point as expected', () => {
-  const lowRate = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200, reductionRate: 0.25 });
-  const mediumRate = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200, reductionRate: 0.5 });
-  const highRate = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200, reductionRate: 1 });
+test('benefit reduction rate moves the gradual phase-out point as expected', () => {
+  const lowRate = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate: 50, maxBenefit: 200, reductionRate: 0.25 });
+  const mediumRate = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate: 50, maxBenefit: 200, reductionRate: 0.5 });
+  const highRate = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate: 50, maxBenefit: 200, reductionRate: 1 });
   close(lowRate.phaseOutWork, 16);
   close(mediumRate.phaseOutWork, 8);
   close(highRate.phaseOutWork, 4);
   assert.ok(highRate.phaseOutWork < mediumRate.phaseOutWork);
 });
 
-test('welfare optima lie on the policy budget and chart data stay finite', () => {
+test('gradual welfare optima lie on the policy budget and chart data stay finite', () => {
   for (const wageRate of [10, 50, 100]) {
     for (const maxBenefit of [0, 100, 400]) {
       for (const reductionRate of [0, 0.5, 1]) {
-        const result = calculateWelfareAnalysis({ wageRate, maxBenefit, reductionRate });
+        const result = calculateWelfareAnalysis({ policyType: 'phaseout', wageRate, maxBenefit, reductionRate });
         const point = result.policyPoint;
         close(point.work + point.leisure, 16);
         const expectedBenefit = Math.max(0, maxBenefit - reductionRate * wageRate * point.work);
@@ -118,7 +163,7 @@ test('welfare optima lie on the policy budget and chart data stay finite', () =>
         close(point.income, 100 + wageRate * point.work + expectedBenefit);
         assert.ok([point.work, point.leisure, point.income, point.utility].every(Number.isFinite));
 
-        const chart = computeWelfareTransferSeries({ wageRate, maxBenefit, reductionRate, stage: 3 });
+        const chart = computeWelfareTransferSeries({ policyType: 'phaseout', wageRate, maxBenefit, reductionRate, stage: 3 });
         for (const series of chart.series) {
           for (const datum of series.data) assert.ok((datum.value ?? datum).every(Number.isFinite));
         }
