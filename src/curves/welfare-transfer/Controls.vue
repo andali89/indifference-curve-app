@@ -37,6 +37,21 @@
       </div>
 
       <div class="control-item">
+        <label for="non-labor-income">非劳动收入 V</label>
+        <div class="input-with-unit">
+          <input
+            id="non-labor-income"
+            type="number"
+            min="0"
+            step="20"
+            :value="modelValue.nonLaborIncome"
+            @input="updateNonNegative('nonLaborIncome', $event.target.value, 100)"
+          />
+          <span class="unit">元</span>
+        </div>
+      </div>
+
+      <div class="control-item">
         <label for="max-benefit">最高补贴 G</label>
         <div class="input-with-unit">
           <input
@@ -66,12 +81,12 @@
 
       <div class="formula-card">
         <template v-if="policyType === 'nail'">
-          <div><strong>不工作：</strong>B = G</div>
-          <div><strong>一旦参加工作：</strong>B = 0</div>
+          <div><strong>不工作：</strong>总收入 = V + G</div>
+          <div><strong>一旦参加工作：</strong>总收入 = V + 劳动收入，B = 0</div>
         </template>
         <template v-else>
           <div><strong>补贴：</strong>B = max(0, G − r × 劳动收入)</div>
-          <div><strong>总收入：</strong>非劳动收入 + 劳动收入 + 补贴</div>
+          <div><strong>总收入：</strong>V + 劳动收入 + 补贴</div>
         </template>
       </div>
 
@@ -97,7 +112,6 @@
 
     <section class="assumption-card">
       <div><strong>可支配时间：</strong>16 小时</div>
-      <div><strong>非劳动收入：</strong>100 元</div>
       <div><strong>偏好：</strong>Cobb–Douglas，收入与闲暇权重均为 1</div>
     </section>
   </div>
@@ -112,6 +126,7 @@ const props = defineProps({
     default: () => ({
       policyType: 'nail',
       wageRate: 50,
+      nonLaborIncome: 100,
       maxBenefit: 200,
       reductionRate: 0.5,
       stage: 1,
