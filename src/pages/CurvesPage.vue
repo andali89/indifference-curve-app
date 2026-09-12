@@ -266,7 +266,7 @@ function cloneParams(source) {
 }
 
 .sidebar {
-  min-width: 200px;
+  min-width: 300px;
   max-width: 700px;
   background: white;
   box-shadow: 2px 0 20px rgba(0, 0, 0, 0.1);
