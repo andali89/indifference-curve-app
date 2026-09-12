@@ -12,6 +12,7 @@ export default {
     ...UTILITY_DEFAULTS,
     policyType: 'nail',
     wageRate: 50,
+    nonLaborIncome: 100,
     maxBenefit: 200,
     reductionRate: 0.5,
     stage: 1,
