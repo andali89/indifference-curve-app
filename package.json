@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test:browser": "node tests/chart-rendering.mjs",
+    "test:browser": "node tests/chart-rendering.mjs && node tests/welfare-rendering.mjs",
     "test": "node --test tests/utility-models.test.js",
     "preview": "vite preview"
   },

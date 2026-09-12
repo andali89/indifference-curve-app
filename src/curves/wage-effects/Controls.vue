@@ -19,7 +19,7 @@
           <input id="h-weight" type="number" min="0.1" step="0.1" :value="modelValue.hWeight" @input="updateNumber('hWeight', $event.target.value)" />
         </div>
       </div>
-      <div v-else class="control-grid">
+      <div v-else class="control-grid utility-parameter-grid">
         <div class="control-item">
           <label for="satiation-k">收入边际效用递减速度 (K)</label>
           <input id="satiation-k" type="number" min="1" step="10" :value="modelValue.satiationK" @input="updateNumber('satiationK', $event.target.value)" />
@@ -185,6 +185,11 @@ label {
   font-weight: 500;
 }
 
+.utility-parameter-grid label {
+  min-height: 2.8em;
+  line-height: 1.4;
+}
+
 .input-with-unit {
   display: flex;
   align-items: center;
@@ -262,6 +267,10 @@ input[type='number'], select {
 @media (max-width: 900px) {
   .control-grid {
     grid-template-columns: 1fr;
+  }
+
+  .utility-parameter-grid label {
+    min-height: 0;
   }
 }
 </style>
