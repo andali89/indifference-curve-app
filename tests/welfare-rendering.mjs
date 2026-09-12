@@ -87,7 +87,10 @@ try {
 
   let current = await validateCurrent();
   assert.equal(current.params.policyType, 'nail');
+  assert.equal(current.params.nonLaborIncome, 100);
   assert.equal(current.meta.policyType, 'nail');
+  assert.equal(current.meta.nonLaborIncome, 100);
+  assert.equal(await page.locator('#non-labor-income').count(), 1, 'non-labor income should be adjustable');
   assert.equal(await page.locator('#reduction-rate').count(), 0, 'reduction rate should be hidden for nail welfare');
 
   const stagePixels = new Set();
@@ -125,10 +128,21 @@ try {
   });
   assert.equal(current.meta.participationChoice, 'nonwork');
   assert.equal(current.meta.workChange, -7);
-  const cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
+  let cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
   assert.deepEqual(cliff.data.map(point => point.value ?? point), [[16, 100], [16, 300]]);
   assert.equal(cliff.lineStyle.type, 'dashed');
 
+  await page.fill('#non-labor-income', '200');
+  current = await validateCurrent();
+  assert.equal(current.params.nonLaborIncome, 200);
+  assert.equal(current.meta.nonLaborIncome, 200);
+  assert.equal(current.meta.baselinePoint.work, 6);
+  assert.equal(current.meta.baselinePoint.income, 500);
+  assert.equal(current.meta.nonworkPoint.income, 400);
+  cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
+  assert.deepEqual(cliff.data.map(point => point.value ?? point), [[16, 200], [16, 400]]);
+
+  await page.fill('#non-labor-income', '100');
   await page.fill('#max-benefit', '100');
   current = await validateCurrent();
   assert.equal(current.meta.participationChoice, 'work');
@@ -163,6 +177,14 @@ try {
   });
   assert.ok(current.texts.includes('B'));
 
+  await page.fill('#non-labor-income', '200');
+  current = await validateCurrent();
+  assert.equal(current.meta.nonLaborIncome, 200);
+  assert.equal(current.meta.baselinePoint.work, 6);
+  assert.equal(current.meta.kinkPoint.income, 600);
+  assert.equal(current.meta.policyPoint.income, 400);
+
+  await page.fill('#non-labor-income', '100');
   await page.locator('.stage-button').nth(1).click();
   await page.fill('#reduction-rate', '1');
   current = await validateCurrent();
@@ -182,7 +204,7 @@ try {
 
   await page.screenshot({ path: `${artifacts}/welfare-final.png` });
   assert.deepEqual(errors, [], 'browser console/runtime errors');
-  console.log('PASS: nail welfare default, participation cliff, policy switching, and gradual phaseout render correctly.');
+  console.log('PASS: nail welfare default, adjustable non-labor income, policy switching, and gradual phaseout render correctly.');
 } finally {
   await writeFile(`${artifacts}/trace.json`, JSON.stringify({ traces, errors }, null, 2));
   await browser?.close();
