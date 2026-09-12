@@ -10,6 +10,7 @@ export default {
   ChartInfoComponent: ChartInfo,
   defaultParams: {
     ...UTILITY_DEFAULTS,
+    policyType: 'nail',
     wageRate: 50,
     maxBenefit: 200,
     reductionRate: 0.5,
