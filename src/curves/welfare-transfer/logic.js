@@ -13,6 +13,11 @@ const DEFAULT_WAGE = 50;
 const DEFAULT_MAX_BENEFIT = 200;
 const DEFAULT_REDUCTION_RATE = 0.5;
 
+export const WELFARE_POLICY_TYPES = {
+  NAIL: 'nail',
+  PHASEOUT: 'phaseout',
+};
+
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -32,6 +37,9 @@ function normalizeParams(params = {}) {
   const reductionRate = Number(params.reductionRate);
 
   return {
+    policyType: params.policyType === WELFARE_POLICY_TYPES.PHASEOUT
+      ? WELFARE_POLICY_TYPES.PHASEOUT
+      : WELFARE_POLICY_TYPES.NAIL,
     wageRate: wageRate > 0 ? wageRate : DEFAULT_WAGE,
     maxBenefit: Number.isFinite(maxBenefit) && maxBenefit >= 0 ? maxBenefit : DEFAULT_MAX_BENEFIT,
     reductionRate: Number.isFinite(reductionRate)
@@ -43,15 +51,20 @@ function normalizeParams(params = {}) {
 }
 
 export function calculateTransfer(earnedIncome, params = {}) {
-  const { maxBenefit, reductionRate } = normalizeParams(params);
+  const normalized = normalizeParams(params);
   const earnings = Math.max(Number(earnedIncome) || 0, 0);
-  return Math.max(0, maxBenefit - reductionRate * earnings);
+  if (normalized.policyType === WELFARE_POLICY_TYPES.NAIL) {
+    return earnings > 1e-10 ? 0 : normalized.maxBenefit;
+  }
+  return Math.max(0, normalized.maxBenefit - normalized.reductionRate * earnings);
 }
 
 function consumptionAtWork(workHours, normalized) {
   const work = clamp(Number(workHours) || 0, 0, TOTAL_AVAILABLE_HOURS);
   const earnedIncome = normalized.wageRate * work;
-  const benefit = Math.max(0, normalized.maxBenefit - normalized.reductionRate * earnedIncome);
+  const benefit = normalized.policyType === WELFARE_POLICY_TYPES.NAIL
+    ? (work <= 1e-10 ? normalized.maxBenefit : 0)
+    : Math.max(0, normalized.maxBenefit - normalized.reductionRate * earnedIncome);
   return {
     work,
     leisure: TOTAL_AVAILABLE_HOURS - work,
@@ -83,7 +96,7 @@ function calculateBaselinePoint(normalized) {
   }, normalized.utilityParams);
 }
 
-function calculatePolicyPoint(normalized) {
+function calculatePhaseoutPolicyPoint(normalized) {
   if (normalized.maxBenefit === 0) return calculateBaselinePoint(normalized);
 
   const candidates = new Set([0, TOTAL_AVAILABLE_HOURS]);
@@ -131,10 +144,40 @@ function calculatePolicyPoint(normalized) {
   return best || pointWithUtility(consumptionAtWork(0, normalized), utilityParams);
 }
 
+function calculateNailChoice(normalized, baselinePoint) {
+  const workingPoint = baselinePoint;
+  const nonworkPoint = pointWithUtility(consumptionAtWork(0, normalized), normalized.utilityParams);
+  const participationChoice = nonworkPoint.utility > workingPoint.utility + 1e-10 ? 'nonwork' : 'work';
+  return {
+    workingPoint,
+    nonworkPoint,
+    participationChoice,
+    policyPoint: participationChoice === 'nonwork' ? nonworkPoint : workingPoint,
+  };
+}
+
 export function calculateWelfareAnalysis(params = {}) {
   const normalized = normalizeParams(params);
   const baselinePoint = calculateBaselinePoint(normalized);
-  const policyPoint = calculatePolicyPoint(normalized);
+
+  if (normalized.policyType === WELFARE_POLICY_TYPES.NAIL) {
+    const nail = calculateNailChoice(normalized, baselinePoint);
+    return {
+      ...normalized,
+      baselinePoint,
+      ...nail,
+      phaseOutEarnedIncome: null,
+      phaseOutWork: null,
+      hasVisibleKink: false,
+      kinkPoint: null,
+      hasBenefitCliff: normalized.maxBenefit > 0,
+      benefitCliffAmount: normalized.maxBenefit,
+      workChange: nail.policyPoint.work - baselinePoint.work,
+      leisureChange: nail.policyPoint.leisure - baselinePoint.leisure,
+    };
+  }
+
+  const policyPoint = calculatePhaseoutPolicyPoint(normalized);
   const phaseOutEarnedIncome = normalized.reductionRate > 0
     ? normalized.maxBenefit / normalized.reductionRate
     : Infinity;
@@ -151,10 +194,15 @@ export function calculateWelfareAnalysis(params = {}) {
     ...normalized,
     baselinePoint,
     policyPoint,
+    workingPoint: null,
+    nonworkPoint: null,
+    participationChoice: null,
     phaseOutEarnedIncome,
     phaseOutWork,
     hasVisibleKink,
     kinkPoint,
+    hasBenefitCliff: false,
+    benefitCliffAmount: 0,
     workChange: policyPoint.work - baselinePoint.work,
     leisureChange: policyPoint.leisure - baselinePoint.leisure,
   };
@@ -183,24 +231,56 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
   ];
 
   if (result.stage >= 2) {
-    series.push(makeLineSeries('福利计划预算约束', generatePolicyBudgetLine(result), '#0f766e', 3));
-    if (result.kinkPoint) series.push(makePointSeries('K', result.kinkPoint, '#d97706', 12));
+    if (result.policyType === WELFARE_POLICY_TYPES.NAIL) {
+      series.push(makeLineSeries('钉子形：参加工作预算线', generateBaselineBudgetLine(result), '#0f766e', 3));
+      if (result.hasBenefitCliff) {
+        series.push(
+          makeLineSeries(
+            '补贴断崖 G（示意）',
+            [[TOTAL_AVAILABLE_HOURS, NON_LABOR_INCOME], [TOTAL_AVAILABLE_HOURS, round(result.nonworkPoint.income)]],
+            '#d97706',
+            2,
+            'dashed'
+          ),
+          makeOpenPointSeries([TOTAL_AVAILABLE_HOURS, NON_LABOR_INCOME], '#0f766e'),
+          makePointSeries('C', result.nonworkPoint, result.stage >= 3 ? '#7c3aed' : '#d97706', 12)
+        );
+      }
+    } else {
+      series.push(makeLineSeries('福利计划预算约束', generatePhaseoutBudgetLine(result), '#0f766e', 3));
+      if (result.kinkPoint) series.push(makePointSeries('K', result.kinkPoint, '#d97706', 12));
+    }
   }
 
   if (result.stage >= 3) {
-    series.push(
-      makeLineSeries(
-        '福利计划下无差异曲线 U₁',
-        generateIndifferenceCurve(result.policyPoint.utility, axis.max, result.utilityParams, [result.policyPoint]),
-        '#7c3aed',
-        2.5,
-        'solid',
-        true
-      ),
-      makePointSeries('B', result.policyPoint, '#7c3aed'),
-      makeProjection(result.baselinePoint),
-      makeProjection(result.policyPoint)
-    );
+    if (result.policyType === WELFARE_POLICY_TYPES.NAIL) {
+      if (Math.abs(result.policyPoint.utility - result.baselinePoint.utility) > 1e-8) {
+        series.push(makeLineSeries(
+          '福利计划下无差异曲线 U₁',
+          generateIndifferenceCurve(result.policyPoint.utility, axis.max, result.utilityParams, [result.policyPoint]),
+          '#7c3aed',
+          2.5,
+          'solid',
+          true
+        ));
+      }
+      series.push(makeProjection(result.baselinePoint));
+      if (result.participationChoice === 'nonwork') series.push(makeProjection(result.nonworkPoint));
+    } else {
+      series.push(
+        makeLineSeries(
+          '福利计划下无差异曲线 U₁',
+          generateIndifferenceCurve(result.policyPoint.utility, axis.max, result.utilityParams, [result.policyPoint]),
+          '#7c3aed',
+          2.5,
+          'solid',
+          true
+        ),
+        makePointSeries('B', result.policyPoint, '#7c3aed'),
+        makeProjection(result.baselinePoint),
+        makeProjection(result.policyPoint)
+      );
+    }
   }
 
   return {
@@ -208,6 +288,7 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
     axis,
     meta: {
       stage: result.stage,
+      policyType: result.policyType,
       utilityType: result.utilityParams.utilityType,
       utilityModelName: UTILITY_MODEL_NAMES[result.utilityParams.utilityType],
       totalHours: TOTAL_AVAILABLE_HOURS,
@@ -219,6 +300,11 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
       phaseOutWork: Number.isFinite(result.phaseOutWork) ? round(result.phaseOutWork) : null,
       hasVisibleKink: result.hasVisibleKink,
       kinkPoint: result.kinkPoint ? roundPoint(result.kinkPoint) : null,
+      hasBenefitCliff: result.hasBenefitCliff,
+      benefitCliffAmount: round(result.benefitCliffAmount),
+      participationChoice: result.participationChoice,
+      workingPoint: result.workingPoint ? roundPoint(result.workingPoint) : null,
+      nonworkPoint: result.nonworkPoint ? roundPoint(result.nonworkPoint) : null,
       baselinePoint: roundPoint(result.baselinePoint),
       policyPoint: roundPoint(result.policyPoint),
       workChange: round(result.workChange),
@@ -238,7 +324,7 @@ function generateBaselineBudgetLine(result) {
   ];
 }
 
-function generatePolicyBudgetLine(result) {
+function generatePhaseoutBudgetLine(result) {
   const first = consumptionAtWork(TOTAL_AVAILABLE_HOURS, result);
   const last = consumptionAtWork(0, result);
   const data = [[0, round(first.income)]];
@@ -324,6 +410,23 @@ function makePointSeries(label, point, color, symbolSize = 11) {
     },
     tooltip: { show: false },
     z: 6,
+    meta: { holdEligible: false },
+  };
+}
+
+function makeOpenPointSeries(point, color) {
+  return {
+    name: '',
+    type: 'scatter',
+    data: [[round(point[0]), round(point[1])]],
+    symbolSize: 10,
+    itemStyle: {
+      color: '#ffffff',
+      borderColor: color,
+      borderWidth: 2,
+    },
+    tooltip: { show: false },
+    z: 7,
     meta: { holdEligible: false },
   };
 }
