@@ -240,7 +240,7 @@ export function computeWelfareTransferSeries(params = {}, sharedOptions = {}) {
       if (result.hasBenefitCliff) {
         series.push(
           makeLineSeries(
-            '补贴断崖 G（示意）',
+            '补贴断崖 （示意）',
             [[TOTAL_AVAILABLE_HOURS, round(result.nonLaborIncome)], [TOTAL_AVAILABLE_HOURS, round(result.nonworkPoint.income)]],
             '#d97706',
             2,

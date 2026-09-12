@@ -128,7 +128,7 @@ try {
   });
   assert.equal(current.meta.participationChoice, 'nonwork');
   assert.equal(current.meta.workChange, -7);
-  let cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
+  let cliff = current.rendered.find(series => series.name === '补贴断崖（示意）');
   assert.deepEqual(cliff.data.map(point => point.value ?? point), [[16, 100], [16, 300]]);
   assert.equal(cliff.lineStyle.type, 'dashed');
 
@@ -139,7 +139,7 @@ try {
   assert.equal(current.meta.baselinePoint.work, 6);
   assert.equal(current.meta.baselinePoint.income, 500);
   assert.equal(current.meta.nonworkPoint.income, 400);
-  cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
+  cliff = current.rendered.find(series => series.name === '补贴断崖（示意）');
   assert.deepEqual(cliff.data.map(point => point.value ?? point), [[16, 200], [16, 400]]);
 
   await page.fill('#non-labor-income', '100');

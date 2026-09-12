@@ -123,7 +123,7 @@ test('adjustable non-labor income shifts both welfare budget regimes', () => {
   });
   assert.equal(nailChart.meta.nonLaborIncome, 200);
   assert.deepEqual(nailChart.series.find((series) => series.name === '无补贴预算线').data, [[0, 1000], [16, 200]]);
-  assert.deepEqual(nailChart.series.find((series) => series.name === '补贴断崖 G（示意）').data, [[16, 200], [16, 400]]);
+  assert.deepEqual(nailChart.series.find((series) => series.name === '补贴断崖（示意）').data, [[16, 200], [16, 400]]);
 
   const phaseout = calculateWelfareAnalysis({
     policyType: 'phaseout',
@@ -139,7 +139,7 @@ test('adjustable non-labor income shifts both welfare budget regimes', () => {
 
 test('nail chart renders the cliff as a dashed guide rather than a feasible solid segment', () => {
   const chart = computeWelfareTransferSeries({ policyType: 'nail', wageRate: 50, maxBenefit: 200, stage: 3 });
-  const cliff = chart.series.find((series) => series.name === '补贴断崖 G（示意）');
+  const cliff = chart.series.find((series) => series.name === '补贴断崖（示意）');
   assert.ok(cliff);
   assert.equal(cliff.lineStyle.type, 'dashed');
   assert.deepEqual(cliff.data, [[16, 100], [16, 300]]);
