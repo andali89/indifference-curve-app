@@ -76,6 +76,7 @@ test('known default results and satiating income-utility domain', () => {
 test('nail welfare is the default and creates a discontinuous participation choice', () => {
   const result = calculateWelfareAnalysis({ wageRate: 50, maxBenefit: 200 });
   assert.equal(result.policyType, 'nail');
+  assert.equal(result.nonLaborIncome, 100);
   assert.equal(result.hasVisibleKink, false);
   assert.equal(result.hasBenefitCliff, true);
   assert.equal(result.participationChoice, 'nonwork');
@@ -99,6 +100,41 @@ test('nail welfare participation responds to benefit and wage levels', () => {
   const zeroBenefit = calculateWelfareAnalysis({ policyType: 'nail', wageRate: 50, maxBenefit: 0 });
   close(zeroBenefit.policyPoint.work, zeroBenefit.baselinePoint.work);
   close(zeroBenefit.policyPoint.income, zeroBenefit.baselinePoint.income);
+});
+
+test('adjustable non-labor income shifts both welfare budget regimes', () => {
+  const nail = calculateWelfareAnalysis({
+    policyType: 'nail',
+    wageRate: 50,
+    nonLaborIncome: 200,
+    maxBenefit: 200,
+  });
+  close(nail.baselinePoint.work, 6);
+  close(nail.baselinePoint.income, 500);
+  close(nail.nonworkPoint.income, 400);
+  assert.equal(nail.participationChoice, 'nonwork');
+
+  const nailChart = computeWelfareTransferSeries({
+    policyType: 'nail',
+    wageRate: 50,
+    nonLaborIncome: 200,
+    maxBenefit: 200,
+    stage: 2,
+  });
+  assert.equal(nailChart.meta.nonLaborIncome, 200);
+  assert.deepEqual(nailChart.series.find((series) => series.name === '无补贴预算线').data, [[0, 1000], [16, 200]]);
+  assert.deepEqual(nailChart.series.find((series) => series.name === '补贴断崖 G（示意）').data, [[16, 200], [16, 400]]);
+
+  const phaseout = calculateWelfareAnalysis({
+    policyType: 'phaseout',
+    wageRate: 50,
+    nonLaborIncome: 200,
+    maxBenefit: 200,
+    reductionRate: 0.5,
+  });
+  close(phaseout.baselinePoint.work, 6);
+  close(phaseout.kinkPoint.income, 600);
+  close(phaseout.policyPoint.income, 400);
 });
 
 test('nail chart renders the cliff as a dashed guide rather than a feasible solid segment', () => {
