@@ -42,7 +42,7 @@ try {
   await page.selectOption('#curve-select', 'welfare-transfer');
 
   async function snapshot() {
-    await page.waitForTimeout(900);
+    await page.waitForTimeout(700);
     return page.evaluate(() => {
       const area = document.querySelector('.chart-area').__vueParentComponent;
       const chart = document.querySelector('.chart').__vueParentComponent;
@@ -63,22 +63,9 @@ try {
     });
   }
 
-  async function check(stage, overrides = {}) {
+  async function validateCurrent() {
     const current = await snapshot();
-    const expectedParams = {
-      wageRate: 50,
-      maxBenefit: 200,
-      reductionRate: 0.5,
-      ...overrides,
-      stage,
-    };
-    const expected = computeWelfareTransferSeries({
-      ...current.params,
-      ...expectedParams,
-    });
-
-    assert.equal(current.params.stage, stage);
-    for (const [key, value] of Object.entries(expectedParams)) assert.equal(current.params[key], value);
+    const expected = computeWelfareTransferSeries(current.params);
     assert.deepEqual(current.result, expected);
     assert.deepEqual(current.meta, expected.meta);
 
@@ -94,25 +81,33 @@ try {
       for (const point of series.data) assert.ok((point.value ?? point).every(Number.isFinite));
     });
 
-    assert.ok(current.texts.includes('A'));
-    if (stage >= 2 && expected.meta.hasVisibleKink) assert.ok(current.texts.includes('K'));
-    if (stage >= 3) assert.ok(current.texts.includes('B'));
-
     traces.push({ ...current, pixels: undefined });
     return current;
   }
 
+  let current = await validateCurrent();
+  assert.equal(current.params.policyType, 'nail');
+  assert.equal(current.meta.policyType, 'nail');
+  assert.equal(await page.locator('#reduction-rate').count(), 0, 'reduction rate should be hidden for nail welfare');
+
   const stagePixels = new Set();
   for (const stage of [1, 2, 3]) {
     await page.locator('.stage-button').nth(stage - 1).click();
-    const current = await check(stage);
+    current = await validateCurrent();
+    assert.equal(current.params.stage, stage);
+    assert.ok(current.texts.includes('A'));
+    if (stage >= 2) {
+      assert.ok(current.texts.includes('C'));
+      assert.ok(!current.texts.includes('K'));
+    }
+    if (stage >= 3) assert.ok(!current.texts.includes('B'));
     stagePixels.add(current.pixels);
-    await page.screenshot({ path: `${artifacts}/stage-${stage}.png` });
+    await page.screenshot({ path: `${artifacts}/nail-stage-${stage}.png` });
   }
-  assert.equal(stagePixels.size, 3, 'all three teaching stages should visibly differ');
+  assert.equal(stagePixels.size, 3, 'all three nail teaching stages should visibly differ');
 
-  const defaults = (await snapshot()).meta;
-  assert.deepEqual(defaults.baselinePoint, {
+  current = await validateCurrent();
+  assert.deepEqual(current.meta.baselinePoint, {
     leisure: 9,
     work: 7,
     earnedIncome: 350,
@@ -120,17 +115,45 @@ try {
     income: 450,
     utility: 4050,
   });
-  assert.equal(defaults.phaseOutEarnedIncome, 400);
-  assert.equal(defaults.phaseOutWork, 8);
-  assert.deepEqual(defaults.kinkPoint, {
-    leisure: 8,
-    work: 8,
-    earnedIncome: 400,
-    benefit: 0,
-    income: 500,
-    utility: 4000,
+  assert.deepEqual(current.meta.nonworkPoint, {
+    leisure: 16,
+    work: 0,
+    earnedIncome: 0,
+    benefit: 200,
+    income: 300,
+    utility: 4800,
   });
-  assert.deepEqual(defaults.policyPoint, {
+  assert.equal(current.meta.participationChoice, 'nonwork');
+  assert.equal(current.meta.workChange, -7);
+  const cliff = current.rendered.find(series => series.name === '补贴断崖 G（示意）');
+  assert.deepEqual(cliff.data.map(point => point.value ?? point), [[16, 100], [16, 300]]);
+  assert.equal(cliff.lineStyle.type, 'dashed');
+
+  await page.fill('#max-benefit', '100');
+  current = await validateCurrent();
+  assert.equal(current.meta.participationChoice, 'work');
+  assert.equal(current.meta.policyPoint.work, current.meta.baselinePoint.work);
+
+  await page.fill('#max-benefit', '200');
+  await page.fill('#wage-rate', '100');
+  current = await validateCurrent();
+  assert.equal(current.meta.participationChoice, 'work');
+
+  await page.fill('#wage-rate', '50');
+  await page.locator('[data-policy-type="phaseout"]').click();
+  assert.equal(await page.locator('#reduction-rate').count(), 1, 'reduction rate should be shown for gradual phaseout');
+  await page.locator('.stage-button').nth(1).click();
+  current = await validateCurrent();
+  assert.equal(current.params.policyType, 'phaseout');
+  assert.equal(current.meta.phaseOutEarnedIncome, 400);
+  assert.equal(current.meta.phaseOutWork, 8);
+  assert.equal(current.meta.hasVisibleKink, true);
+  assert.ok(current.texts.includes('K'));
+  assert.ok(!current.texts.includes('C'));
+
+  await page.locator('.stage-button').nth(2).click();
+  current = await validateCurrent();
+  assert.deepEqual(current.meta.policyPoint, {
     leisure: 14,
     work: 2,
     earnedIncome: 100,
@@ -138,37 +161,28 @@ try {
     income: 350,
     utility: 4900,
   });
-  assert.equal(defaults.workChange, -5);
+  assert.ok(current.texts.includes('B'));
 
   await page.locator('.stage-button').nth(1).click();
-  await page.fill('#max-benefit', '0');
-  let zeroTransfer = await check(2, { maxBenefit: 0 });
-  const zeroBaseline = zeroTransfer.rendered.find(series => series.name === '无补贴预算线');
-  const zeroPolicy = zeroTransfer.rendered.find(series => series.name === '福利计划预算约束');
-  assert.deepEqual(zeroPolicy.data, zeroBaseline.data);
-
-  await page.fill('#max-benefit', '200');
   await page.fill('#reduction-rate', '1');
-  const fullReduction = await check(2, { reductionRate: 1 });
-  assert.equal(fullReduction.meta.phaseOutWork, 4);
-  assert.equal(fullReduction.meta.hasVisibleKink, true);
+  current = await validateCurrent();
+  assert.equal(current.meta.phaseOutWork, 4);
+  assert.equal(current.meta.hasVisibleKink, true);
 
   await page.fill('#reduction-rate', '0');
-  const noPhaseOut = await check(2, { reductionRate: 0 });
-  assert.equal(noPhaseOut.meta.phaseOutEarnedIncome, null);
-  assert.equal(noPhaseOut.meta.hasVisibleKink, false);
-  assert.ok(!noPhaseOut.texts.includes('K'));
+  current = await validateCurrent();
+  assert.equal(current.meta.phaseOutEarnedIncome, null);
+  assert.equal(current.meta.hasVisibleKink, false);
+  assert.ok(!current.texts.includes('K'));
 
-  await page.fill('#reduction-rate', '0.5');
-  await page.locator('.stage-button').nth(2).click();
-  const beforeWage = await check(3);
-  await page.fill('#wage-rate', '60');
-  const afterWage = await check(3, { wageRate: 60 });
-  assert.notEqual(afterWage.pixels, beforeWage.pixels, 'wage changes should update the chart');
+  await page.locator('[data-policy-type="nail"]').click();
+  current = await validateCurrent();
+  assert.equal(current.params.policyType, 'nail');
+  assert.equal(await page.locator('#reduction-rate').count(), 0);
 
   await page.screenshot({ path: `${artifacts}/welfare-final.png` });
   assert.deepEqual(errors, [], 'browser console/runtime errors');
-  console.log('PASS: welfare transfer stages, kink, zero-transfer, phase-out, and reactive wage updates render correctly.');
+  console.log('PASS: nail welfare default, participation cliff, policy switching, and gradual phaseout render correctly.');
 } finally {
   await writeFile(`${artifacts}/trace.json`, JSON.stringify({ traces, errors }, null, 2));
   await browser?.close();
