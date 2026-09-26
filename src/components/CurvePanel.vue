@@ -4,6 +4,9 @@
       :is="controlsComponent"
       :modelValue="modelValue"
       @update:modelValue="onChildUpdate"
+      @commit:utility="emit('commit:utility', $event)"
+      @preview:utility="emit('preview:utility', $event)"
+      @cancel:utility-preview="emit('cancel:utility-preview')"
     />
   </section>
   <p v-else class="curve-panel__placeholder">请选择一个曲线类型</p>
@@ -23,7 +26,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'commit:utility', 'preview:utility', 'cancel:utility-preview']);
 
 const controlsComponent = computed(() => props.curve?.ControlsComponent ?? null);
 

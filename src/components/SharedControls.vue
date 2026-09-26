@@ -9,6 +9,11 @@
       </label>
     </div>
 
+    <button v-if="props.holdEnabled && local.hold && props.heldCount > 0" class="clear-held" type="button"
+      @click="emit('clear-held')">
+      清除保留曲线 ({{ props.heldCount }})
+    </button>
+
     <div class="control-group checkbox-group">
       <label class="checkbox-label">
         <input type="checkbox" v-model="local.autoYAxis" />
@@ -109,7 +114,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { reactive, watch } from 'vue';
 
 function createDefaultState() {
   
@@ -134,9 +139,13 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  heldCount: {
+    type: Number,
+    default: 0,
+  },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'clear-held']);
 
 const local = reactive({ ...createDefaultState(), ...(props.modelValue || {}) });
 
@@ -234,6 +243,20 @@ function reset() {
   width: 18px;
   height: 18px;
   accent-color: #0ea5a4;
+}
+
+.clear-held {
+  align-self: stretch;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(14, 165, 164, 0.2);
+  background: rgba(14, 165, 164, 0.08);
+  color: #0a5c56;
+  cursor: pointer;
+}
+
+.clear-held:hover {
+  background: rgba(14, 165, 164, 0.15);
 }
 
 .axis-manual-controls {

@@ -60,19 +60,39 @@
     <section class="control-section">
       <h3>效用水平</h3>
       <div class="utility-wrapper">
-        <input
-          class="utility-input"
-          type="number"
-          min="100"
-          step="10"
-          v-model.number="local.utility"
-        />
+        <label for="utility-value">效用值</label>
+        <div class="utility-entry">
+          <input
+            id="utility-value"
+            class="utility-input"
+            type="text"
+            inputmode="numeric"
+            :value="inputValue"
+            :aria-invalid="Boolean(utilityError)"
+            :aria-describedby="utilityError ? 'utility-error' : undefined"
+            @input="onUtilityInput"
+            @keydown.enter.prevent="applyUtility"
+            @keydown.esc.prevent="cancelUtility"
+          />
+          <button type="button" class="utility-apply" :disabled="!hasDraftChange" @click="applyUtility">应用</button>
+        </div>
+        <p v-if="utilityError" id="utility-error" class="utility-error" role="alert">{{ utilityError }}</p>
+        <p v-else-if="sliderPreviewing" class="utility-hint">正在预览 U={{ sliderValue }}；松开滑块或按 Enter 后应用</p>
+        <p v-else-if="hasDraftChange" class="utility-hint">待应用：图中仍显示 U={{ committedUtility }}</p>
         <input
           class="utility-slider"
           type="range"
           min="100"
           max="100000"
-          v-model.number="local.utility"
+          step="1"
+          :value="sliderValue"
+          aria-label="效用水平滑块"
+          @input="previewSlider"
+          @change="onSliderChange"
+          @pointerdown="sliderKeyboardEditing = false"
+          @pointercancel="cancelSlider"
+          @keydown="onSliderKeydown"
+          @blur="finishSlider"
         />
       </div>
     </section>
@@ -80,7 +100,7 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
   modelValue: {
@@ -95,9 +115,105 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'commit:utility', 'preview:utility', 'cancel:utility-preview']);
 
 const local = reactive({ ...props.modelValue });
+const committedUtility = computed(() => Number(props.modelValue.utility ?? 100));
+const inputValue = ref(String(committedUtility.value));
+const sliderValue = ref(committedUtility.value);
+const utilityError = ref('');
+const sliderKeyboardEditing = ref(false);
+const sliderPreviewing = ref(false);
+const hasDraftChange = computed(() => inputValue.value !== String(committedUtility.value));
+
+watch(committedUtility, (value) => {
+  inputValue.value = String(value);
+  sliderValue.value = value;
+  utilityError.value = '';
+  sliderPreviewing.value = false;
+});
+
+function onUtilityInput(event) {
+  inputValue.value = event.target.value;
+  utilityError.value = '';
+}
+
+function parseUtility(text) {
+  const trimmed = text.trim();
+  if (!/^\d+$/.test(trimmed)) return null;
+  const number = Number(trimmed);
+  return Number.isSafeInteger(number) && number >= 100 && number <= 100000 ? number : null;
+}
+
+function applyUtility() {
+  const next = parseUtility(inputValue.value);
+  if (next === null) {
+    utilityError.value = '请输入 100 至 100000 之间的整数。';
+    return;
+  }
+  utilityError.value = '';
+  if (next === committedUtility.value) {
+    inputValue.value = String(next);
+    return;
+  }
+  emit('commit:utility', next);
+}
+
+function cancelUtility() {
+  inputValue.value = String(committedUtility.value);
+  utilityError.value = '';
+}
+
+function previewSlider(event) {
+  setSliderPreview(Number(event.target.value));
+}
+
+function setSliderPreview(next) {
+  sliderValue.value = next;
+  inputValue.value = String(next);
+  utilityError.value = '';
+  sliderPreviewing.value = true;
+  emit('preview:utility', next);
+}
+
+function onSliderKeydown(event) {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelSlider();
+  } else if (event.key === 'Enter') {
+    event.preventDefault();
+    finishSlider();
+  } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(event.key)) {
+    event.preventDefault();
+    sliderKeyboardEditing.value = true;
+    const delta = { ArrowLeft: -10, ArrowDown: -10, ArrowRight: 10, ArrowUp: 10, PageDown: -100, PageUp: 100 }[event.key] ?? 0;
+    const next = event.key === 'Home' ? 100 : event.key === 'End' ? 100000 : sliderValue.value + delta;
+    setSliderPreview(Math.max(100, Math.min(100000, next)));
+  }
+}
+
+function cancelSlider() {
+  sliderPreviewing.value = false;
+  sliderKeyboardEditing.value = false;
+  sliderValue.value = committedUtility.value;
+  cancelUtility();
+  emit('cancel:utility-preview');
+}
+
+function onSliderChange() {
+  if (!sliderKeyboardEditing.value) finishSlider();
+}
+
+function finishSlider() {
+  if (!sliderPreviewing.value) return;
+  sliderPreviewing.value = false;
+  sliderKeyboardEditing.value = false;
+  if (sliderValue.value !== committedUtility.value) {
+    emit('commit:utility', sliderValue.value);
+  } else {
+    emit('cancel:utility-preview');
+  }
+}
 
 watch(
   () => props.modelValue,
@@ -111,10 +227,7 @@ watch(
   local,
   (value) => {
     const clone = { ...value };
-    if (!(clone.utility >= 100)) {
-      clone.utility = 100;
-      local.utility = 100;
-    }
+    clone.utility = committedUtility.value;
     if (!(clone.iWeight > 0)) {
       clone.iWeight = 0.1;
       local.iWeight = 0.1;
@@ -123,7 +236,6 @@ watch(
       clone.hWeight = 0.1;
       local.hWeight = 0.1;
     }
-    console.log('[Controls] emit update:modelValue', clone);
     emit('update:modelValue', clone);
   },
   { deep: true }
@@ -208,9 +320,15 @@ input[type='number'] {
   gap: 12px;
 }
 
+.utility-entry {
+  display: flex;
+  gap: 8px;
+}
+
 .utility-input {
   box-sizing: border-box;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 12px;
   border: 2px solid #e8efee;
   border-radius: 10px;
@@ -220,6 +338,29 @@ input[type='number'] {
   color: #0ea5a4;
   background: linear-gradient(180deg, #fbfffe 0%, #f7fffd 100%);
 }
+
+.utility-apply {
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #0ea5a4;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.utility-apply:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.utility-error, .utility-hint {
+  margin: 0;
+  font-size: 12px;
+}
+
+.utility-error { color: #b91c1c; }
+.utility-hint { color: #555; }
 
 .utility-slider {
   width: 100%;

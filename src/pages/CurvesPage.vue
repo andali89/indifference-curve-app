@@ -19,15 +19,11 @@
         <CurveSelector :curves="curves" v-model="selectedCurveId" />
 
         <CurvePanel :key="selectedCurveId" :curve="activeCurve" :modelValue="activeParams"
-          @update:modelValue="updateActiveParams" />
+          @update:modelValue="updateActiveParams" @commit:utility="commitUtility"
+          @preview:utility="previewUtility" @cancel:utility-preview="cancelUtilityPreview" />
 
-        <SharedControls :modelValue="sharedControls" :holdEnabled="holdEnabledRef"
-          @update:modelValue="applySharedControls" />
-
-        <button v-if="sharedControls.hold && heldSeries.length" class="clear-held" type="button"
-          @click="clearHeldSeries()">
-          清除保留曲线 ({{ heldSeries.length }})
-        </button>
+        <SharedControls :modelValue="sharedControls" :holdEnabled="holdEnabledRef" :heldCount="heldSeries.length"
+          @update:modelValue="applySharedControls" @clear-held="clearHeldCurves" />
 
       </div>
 
@@ -83,11 +79,15 @@ const { sidebarWidth, startResize } = useSidebarResize({
 const { heldSeries, push: pushHeldSeries, clear: clearHeldSeries } = useHoldStack();
 
 const currentResult = ref(null);
-const lastParams = ref(null);
+const sliderPreviewValue = ref(null);
+const sliderPreviewResult = ref(null);
+const sliderAnchor = ref([]);
 const yAxisRange = ref({ min: 0, max: 1200 });
 const chartMeta = ref({});
-const lastRecompute = ref(null);
 const holdEnabledRef = ref(true);
+let pendingHoldSeries = null;
+let recomputeGeneration = 0;
+let previewGeneration = 0;
 
 function applySharedControls(next) {
   if (!next || typeof next !== 'object') {
@@ -107,7 +107,64 @@ function updateActiveParams(next) {
   if (!next || typeof next !== 'object') {
     return;
   }
-  Object.assign(activeParams, next);
+  const patch = { ...next };
+  if (activeCurve.value?.id === 'indifference') {
+    patch.utility = activeParams.utility;
+  }
+  Object.assign(activeParams, patch);
+}
+
+function clearHeldCurves() {
+  clearHeldSeries();
+  pendingHoldSeries = null;
+  if (currentResult.value?.axis) yAxisRange.value = currentResult.value.axis;
+}
+
+function cancelUtilityPreview() {
+  previewGeneration += 1;
+  sliderPreviewValue.value = null;
+  sliderPreviewResult.value = null;
+  sliderAnchor.value = [];
+}
+
+async function previewUtility(next) {
+  if (activeCurve.value?.id !== 'indifference' || !Number.isFinite(next)) return;
+  if (next === activeParams.utility) {
+    cancelUtilityPreview();
+    return;
+  }
+  if (sliderPreviewValue.value === null) {
+    sliderAnchor.value = (currentResult.value?.series || []).filter((series) => series?.meta?.holdEligible);
+  }
+  sliderPreviewValue.value = next;
+  sliderPreviewResult.value = null;
+  const request = ++previewGeneration;
+  const curve = activeCurve.value;
+  const result = await curve.computeSeries(
+    { ...cloneParams(activeParams), utility: next },
+    chartComputeOptions()
+  );
+  if (request === previewGeneration && sliderPreviewValue.value === next && curve === activeCurve.value) {
+    sliderPreviewResult.value = result;
+  }
+}
+
+function commitUtility(next) {
+  if (activeCurve.value?.id !== 'indifference' || !Number.isSafeInteger(next) || next < 100 || next > 100000) return;
+  cancelUtilityPreview();
+  if (next === activeParams.utility) return;
+  if (sharedControls.hold && !pendingHoldSeries) {
+    pendingHoldSeries = (currentResult.value?.series || []).filter((series) => series?.meta?.holdEligible);
+  }
+  activeParams.utility = next;
+}
+
+function chartComputeOptions() {
+  return {
+    autoYAxis: sharedControls.autoYAxis,
+    manualYMin: sharedControls.manualYMin,
+    manualYMax: sharedControls.manualYMax,
+  };
 }
 
 watchEffect(() => {
@@ -119,7 +176,7 @@ watchEffect(() => {
 const activeCurve = computed(() => getCurve(selectedCurveId.value));
 
 // ...existing code...
-watch(selectedCurveId, (newId, oldId) => {
+watch(selectedCurveId, (newId) => {
   const curve = getCurve(newId);
 
   if (!curve) return;
@@ -133,30 +190,17 @@ watch(selectedCurveId, (newId, oldId) => {
   sharedControls.manualYMin = sharedControls.defaultYAxis.min;
   // 其它初始化与首次绘图
   clearHeldSeries();
+  pendingHoldSeries = null;
+  cancelUtilityPreview();
   currentResult.value = null;
-  lastParams.value = null;
   recompute();
 }, { immediate: true });
-
-watch(
-  activeCurve,
-  (curve) => {
-    if (!curve) return;
-    resetActiveParams(curve.defaultParams || {});
-    clearHeldSeries();
-    currentResult.value = null;
-    lastParams.value = null;
-    recompute();
-
-  },
-  { immediate: true }
-);
 
 watch(
   () => sharedControls.hold,
   (enabled) => {
     if (!enabled) {
-      clearHeldSeries();
+      clearHeldCurves();
     }
   }
 );
@@ -183,8 +227,16 @@ watch(
 );
 
 const displaySeries = computed(() => {
-  const resultSeries = currentResult.value?.series ?? [];
-  return [...heldSeries.value, ...resultSeries];
+  const preview = sliderPreviewResult.value;
+  const resultSeries = preview?.series ?? currentResult.value?.series ?? [];
+  const anchor = preview && sharedControls.hold
+    ? sliderAnchor.value.map((series) => ({
+        ...series,
+        name: `${series.name} (当前)`,
+        lineStyle: { ...series.lineStyle, width: 2, type: 'dashed', color: '#9ca3af' },
+      }))
+    : [];
+  return [...heldSeries.value, ...anchor, ...resultSeries];
 });
 
 async function recompute() {
@@ -193,38 +245,25 @@ async function recompute() {
     return;
   }
 
+  const request = ++recomputeGeneration;
   const clonedParams = cloneParams(activeParams);
 
-  maybeAddHeldSeries(clonedParams);
-
   // Await computeSeries in case it's async (like computeSupplySeries)
-  const result = await curve.computeSeries(clonedParams, {
-    autoYAxis: sharedControls.autoYAxis,
-    manualYMin: sharedControls.manualYMin,
-    manualYMax: sharedControls.manualYMax,
-  });
+  const result = await curve.computeSeries(clonedParams, chartComputeOptions());
+  if (request !== recomputeGeneration || curve !== activeCurve.value) return;
 
+  if (sharedControls.hold && pendingHoldSeries?.length) pushHeldSeries(pendingHoldSeries);
+  pendingHoldSeries = null;
   currentResult.value = result;
   chartMeta.value = result?.meta || {};
-  yAxisRange.value = result?.axis || { min: 0, max: 1200 };
-  lastParams.value = clonedParams;
-  lastRecompute.value = new Date().toISOString();
-}
-
-function maybeAddHeldSeries(nextParams) {
-  if (!sharedControls.hold) return;
-  if (!currentResult.value || !lastParams.value) return;
-
-  const prevParams = lastParams.value;
-  const nextUtility = Number(nextParams.utility ?? 0);
-  const prevUtility = Number(prevParams.utility ?? 0);
-  if (Math.abs(nextUtility - prevUtility) < 100) return;
-
-  const holdable = (currentResult.value?.series || []).filter(
-    (series) => series?.meta?.holdEligible
-  );
-  if (!holdable.length) return;
-  pushHeldSeries(holdable);
+  const nextAxis = result?.axis || { min: 0, max: 1200 };
+  yAxisRange.value = sharedControls.hold && sharedControls.autoYAxis && heldSeries.value.length
+    ? { min: Math.min(yAxisRange.value.min, nextAxis.min), max: Math.max(yAxisRange.value.max, nextAxis.max) }
+    : nextAxis;
+  if (sliderPreviewValue.value !== null) {
+    sliderAnchor.value = (result?.series || []).filter((series) => series?.meta?.holdEligible);
+    previewUtility(sliderPreviewValue.value);
+  }
 }
 
 function cloneParams(source) {
@@ -304,21 +343,6 @@ function cloneParams(source) {
   font-size: 13px;
   opacity: 0.7;
   color: #86868b;
-}
-
-.clear-held {
-  margin: 0 36px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(14, 165, 164, 0.2);
-  background: rgba(14, 165, 164, 0.08);
-  color: #0a5c56;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.clear-held:hover {
-  background: rgba(14, 165, 164, 0.15);
 }
 
 .resize-handle {
